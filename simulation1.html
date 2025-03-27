@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow">
+
+  <title>訪問看護シミュレーション：山本久子さん</title>
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 0; background: #f7f7f7; }
+    .container { max-width: 600px; margin: 0 auto; padding: 1rem; background: white; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    .header { text-align: center; margin-bottom: 1rem; }
+    .chat-box { border: 1px solid #ccc; border-radius: 8px; padding: 1rem; height: 400px; overflow-y: auto; background: #fff; display: flex; flex-direction: column; }
+    .message { margin: 0.5rem 0; padding: 0.5rem 1rem; border-radius: 12px; max-width: 80%; }
+    .user { background: #e0f7fa; align-self: flex-end; margin-left: auto; }
+    .gpt { background: #f1f8e9; align-self: flex-start; margin-right: auto; }
+    .input-area { display: flex; margin-top: 1rem; }
+    input { flex: 1; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; }
+    button { margin-left: 0.5rem; padding: 0.5rem 1rem; border: none; background: #4caf50; color: white; border-radius: 4px; cursor: pointer; }
+    .illustration { text-align: center; margin-bottom: 1rem; }
+    .illustration img { width: 120px; border-radius: 50%; }
+    .profile-box, .description-box { background: #f0f0f0; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.9rem; line-height: 1.5; }
+    #summarySection { display: none; margin-top: 1.5rem; }
+    #summaryArea { white-space: pre-wrap; border: 1px solid #ccc; padding: 1rem; border-radius: 8px; background: #f9f9f9; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2>訪問看護シミュレーション</h2>
+    </div>
+    <div class="illustration">
+      <img src="https://raw.githubusercontent.com/takemasa-dc/simulation1/refs/heads/main/simulation1%E7%94%BB%E5%83%8F.png" alt="久子さんのイラスト">
+    </div>
+    <div class="description-box">
+      <strong>【今回の状況】</strong><br>
+      山本久子さんへの<strong>初回訪問</strong>です。これまでの情報（主治医・ケアマネ等）をもとに、生活状況や意向を確認し、信頼関係を築くことが目的です。<br><br>
+      <strong>【あなたが行うこと】</strong><br>
+      このシミュレーションでは、<strong>利用者さんと対話を行い</strong>、観察やケアの内容も<strong>言葉で表現</strong>してください（例：「足浴をしましょうか」「お薬は飲めていますか？」など）。<br>
+      GPTは久子さんとして返答します。やりとりを通じて、対応の良さや改善点についてフィードバックを受けることができます。
+    </div>
+    <div class="profile-box">
+      <strong>利用者プロフィール</strong><br>
+      氏名：山本 久子（やまもと ひさこ） / 年齢・性別：78歳・女性 / 住居：独居（賃貸マンション2階・階段あり）<br>
+      要介護認定：要介護1（軽度認知症＋服薬管理不安） / 訪問形態：介護保険による訪問看護<br>
+      主な診断名：アルツハイマー型認知症（MMSE 23）、2型糖尿病、高血圧 / 主治医：A内科クリニック（月1回外来）<br>
+      関わる職種：訪問看護師、主治医（外来）、ケアマネ、長女、薬局 / 家族：長女（近居・週1訪問）、次女（遠方）<br>
+      価値観：「迷惑をかけたくない」「できることは自分で」「住み慣れた家で暮らしたい」<br>
+      生活状況：ADLはおおむね自立、調理や買い物は可能、服薬はやや不安あり
+    </div>
+    <div id="chat" class="chat-box"></div>
+    <div class="input-area">
+      <input type="text" id="userInput" placeholder="久子さんに話しかけてみましょう..." />
+      <button onclick="sendMessage()">送信</button>
+      <button onclick="endConversation()">会話を終了する</button>
+    </div>
+
+    <div id="summarySection">
+      <h3>■ 振り返り（GPTによる要点まとめ）</h3>
+      <div id="summaryArea"></div>
+      <button onclick="downloadPDF()">PDFとして保存</button>
+    </div>
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    const chat = document.getElementById('chat');
+    const userInput = document.getElementById('userInput');
+    const summarySection = document.getElementById('summarySection');
+    const summaryArea = document.getElementById('summaryArea');
+
+    const systemPrompt = `あなたは、78歳の女性「山本 久子（やまもと ひさこ）」です。以下のプロフィールと状況に基づき、訪問看護師とのやり取りに答えてください。
+
+【プロフィール】
+・年齢・性別：78歳・女性
+・住居：独居（賃貸マンション2階・階段あり）
+・要介護認定：要介護1（軽度認知症＋服薬管理不安）
+・主な診断名：アルツハイマー型認知症（MMSE 23）、2型糖尿病、高血圧
+・主治医：A内科クリニック（月1回外来）
+・関わる職種：訪問看護師、主治医、ケアマネ、長女、薬局
+・家族：長女（近居・週1訪問）、次女（遠方）
+・価値観：「迷惑をかけたくない」「できることは自分で」「住み慣れた家で暮らしたい」
+・生活状況：ADLはおおむね自立、調理や買い物は可能、服薬はやや不安あり
+
+【今回の状況】
+訪問看護の初回訪問です。これまでの情報をもとに、生活状況や意向の確認、信頼関係の構築が目的です。
+
+【制約】
+あなたは患者の立場として話します。「○○してください」などの看護師の言葉に対して、実際に会話しているように自然に返答してください。
+また、症状の観察や測定（例：血圧を測るなど）の指示があれば、現実的な数値や状況を返してください（例：「上が132、下が78でしたよ」など）。`;
+
+    let messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'assistant', content: 'こんにちは。今日はどんな方が来られるのか、ちょっと緊張しています。' }
+    ];
+
+    userInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    async function sendMessage() {
+      const text = userInput.value;
+      if (!text) return;
+      renderMessage(text, 'user');
+      messages.push({ role: 'user', content: text });
+      userInput.value = '';
+
+      const res = await fetch('https://script.google.com/macros/s/AKfycbwD16EWDbYG2n2aM7S3PxYtnYI4Ovup_SNpoy7wtt-Q02WSrFUxVVxDf-7fFxOfs2pjKA/exec', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: messages })
+      });
+
+      const data = await res.json();
+      const reply = data.choices[0].message.content;
+      messages.push({ role: 'assistant', content: reply });
+      renderMessage(reply, 'gpt');
+    }
+
+    async function endConversation() {
+      messages.push({ role: 'user', content: `これまでの会話を振り返って、看護師の対応について以下の2点でフィードバックしてください。
+
+■ よかった点
+■ もっとよくなる点
+
+それぞれについて、以下の視点を重視して評価してください：
+- 利用者さんを「活きる」に導けていたかどうか（生活・尊厳・主体性などの視点）
+- 観察やケア内容が、病態・病状に関する医学的・看護的エビデンスに即して適切だったか
+
+また、各点については「なぜそれがよかったのか（もしくは不十分だったのか）」を根拠とともに説明してください。
+根拠は、利用者像、看護の基本的視点、病態理解、対応の適否などに基づいた内容にしてください。
+
+出力は以下のような体裁で、見出しと箇条書きを用いて簡潔に記述してください：
+-----------------------
+■ よかった点
+・○○ができていた
+　→ ○○という理由から、本人の○○を支える対応になっていた
+
+■ もっとよくなる点
+・○○の観察が不足していた
+　→ ○○という病態・症状が背景にあるため、より丁寧な観察が求められる
+-----------------------
+
+口調は教育的かつ丁寧に、読みやすくまとめてください。` });
+
+      const res = await fetch('https://script.google.com/macros/s/AKfycbwMfzWAK_zzXLhYdzjGmWpVElt0v2sL_uFXB2QjN4kEsajanPcTa1I7CjrHWNMaDpxWnQ/exec', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: messages })
+      });
+
+      const data = await res.json();
+      const summary = data.choices[0].message.content;
+      summaryArea.textContent = summary;
+      summarySection.style.display = 'block';
+    }
+
+    function renderMessage(content, sender) {
+      const div = document.createElement('div');
+      div.className = 'message ' + sender;
+      div.textContent = content;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function downloadPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      doc.text("■ 要点まとめ", 10, 10);
+      doc.text(summaryArea.innerText, 10, 20);
+      doc.save("振り返り.pdf");
+    }
+  </script>
+</body>
+</html>
