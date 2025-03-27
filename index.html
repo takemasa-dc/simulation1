@@ -120,19 +120,16 @@
     }
 
     async function endConversation() {
-      messages.push({ role: 'user', content: `ここからはあなたは指導者になります。これまでの会話を振り返って、看護師の対応について以下の2点でフィードバックしてください。
+      messages.push({ role: 'user', content: `あなたは指導者です。以下の訪問看護師と利用者とのやりとりをもとに、以下の2点で教育的なフィードバックしてください。
 
 ■ よかった点
 ■ もっとよくなる点
 
-それぞれについて、以下の視点を重視して評価してください：
+【評価視点】
 - 利用者さんを「活きる」に導けていたかどうか（生活・尊厳・主体性などの視点）
 - 観察やケア内容が、病態・病状に関する医学的・看護的エビデンスに即して適切だったか
 
-また、各点については「なぜそれがよかったのか（もしくは不十分だったのか）」を根拠とともに説明してください。
-根拠は、利用者像、看護の基本的視点、病態理解、対応の適否などに基づいた内容にしてください。
-
-出力は以下のような体裁で、見出しと箇条書きを用いて具体的に記述してください：
+【出力形式】
 -----------------------
 ■ よかった点
 ・○○ができていた
@@ -143,19 +140,27 @@
 　→ ○○という病態・症状が背景にあるため、より丁寧な観察が求められる
 -----------------------
 
-口調は教育的かつ丁寧に、読みやすくまとめてください。` });
+【看護師とのやり取り】
+${messages.map(m => `${m.role === 'user' ? '看護師' : '久子'}：${m.content}`).join('\n')}
+`;
 
-      const res = await fetch('https://simulation.08t-ishikawa.workers.dev/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'gpt-4o', messages: messages })
-      });
+  const res = await fetch('https://simulation.08t-ishikawa.workers.dev/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: 'あなたは看護教育者です。以下のやりとりをもとに教育的なフィードバックを行ってください。' },
+        { role: 'user', content: feedbackPrompt }
+      ]
+    })
+  });
 
-      const data = await res.json();
-      const summary = data.choices[0].message.content;
-      summaryArea.textContent = summary;
-      summarySection.style.display = 'block';
-    }
+  const data = await res.json();
+  const summary = data.choices[0].message.content;
+  summaryArea.textContent = summary;
+  summarySection.style.display = 'block';
+}
 
 function renderMessage(content, sender) {
   const matches = content.match(/「([^」]+)」/g); // 「〜」にマッチする部分を抽出
