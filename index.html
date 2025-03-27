@@ -107,7 +107,8 @@
       messages.push({ role: 'user', content: text });
       userInput.value = '';
 
-      const res = await fetch('https://script.google.com/macros/s/AKfycbwD16EWDbYG2n2aM7S3PxYtnYI4Ovup_SNpoy7wtt-Q02WSrFUxVVxDf-7fFxOfs2pjKA/exec', {
+      const res = await fetch('https://script.google.com/macros/s/AKfycbzoIP5o7lv9H0AF_ZT3fOldLmceUxyK9_PyvuyFGpznsCl9bOFgCJRzefoJXcsuNZ5uNw/exec
+', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: messages })
