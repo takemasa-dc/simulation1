@@ -107,9 +107,9 @@
       messages.push({ role: 'user', content: text });
       userInput.value = '';
 
-      const res = await fetch('https://script.google.com/macros/s/AKfycbxjTqx-nkFeX_59uJExMvqNJ2LKPK4sivHgfbhcxqIjMT_c6Q8ItyPQ9xhVoH4OZFqDuQ/exec', {
+      const res = await fetch('https://script.google.com/macros/s/AKfycbzwGURs28wx_W_KYmVP89Rd54qFOkWkq2yhpApQYbx1jkmv81v7Obc4asIWuHcjAjMgcw/exec', {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: messages })
       });
 
@@ -145,9 +145,9 @@
 
 口調は教育的かつ丁寧に、読みやすくまとめてください。` });
 
-      const res = await fetch('https://script.google.com/macros/s/AKfycbxjTqx-nkFeX_59uJExMvqNJ2LKPK4sivHgfbhcxqIjMT_c6Q8ItyPQ9xhVoH4OZFqDuQ/exec', {
+      const res = await fetch('https://script.google.com/macros/s/AKfycbzwGURs28wx_W_KYmVP89Rd54qFOkWkq2yhpApQYbx1jkmv81v7Obc4asIWuHcjAjMgcw/exec', {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: messages })
       });
 
