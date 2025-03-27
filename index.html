@@ -30,7 +30,7 @@
       <h2>訪問看護シミュレーション</h2>
     </div>
     <div class="illustration">
-      <img src="https://raw.githubusercontent.com/takemasa-dc/simulation1/refs/heads/main/simulation1%E7%94%BB%E5%83%8F.png" alt="久子さんのイラスト">
+      <img src="https://raw.githubusercontent.com/takemasa-dc/simulation1/refs/heads/main/image1.png" alt="久子さんのイラスト">
     </div>
     <div class="description-box">
       <strong>【今回の状況】</strong><br>
@@ -107,8 +107,7 @@
       messages.push({ role: 'user', content: text });
       userInput.value = '';
 
-      const res = await fetch('https://script.google.com/macros/s/AKfycbzoIP5o7lv9H0AF_ZT3fOldLmceUxyK9_PyvuyFGpznsCl9bOFgCJRzefoJXcsuNZ5uNw/exec
-', {
+      const res = await fetch('https://script.google.com/macros/s/AKfycbzoIP5o7lv9H0AF_ZT3fOldLmceUxyK9_PyvuyFGpznsCl9bOFgCJRzefoJXcsuNZ5uNw/exec', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: messages })
