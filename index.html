@@ -110,7 +110,7 @@
       const res = await fetch('https://simulation.08t-ishikawa.workers.dev/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: messages })
+        body: JSON.stringify({ model: 'gpt-4o', messages: messages })
       });
 
       const data = await res.json();
@@ -148,7 +148,7 @@
       const res = await fetch('https://simulation.08t-ishikawa.workers.dev/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: messages })
+        body: JSON.stringify({ model: 'gpt-4o', messages: messages })
       });
 
       const data = await res.json();
