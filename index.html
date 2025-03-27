@@ -107,7 +107,7 @@
       messages.push({ role: 'user', content: text });
       userInput.value = '';
 
-      const res = await fetch('https://script.google.com/macros/s/AKfycbzoIP5o7lv9H0AF_ZT3fOldLmceUxyK9_PyvuyFGpznsCl9bOFgCJRzefoJXcsuNZ5uNw/exec', {
+      const res = await fetch('https://script.google.com/macros/s/AKfycbxjTqx-nkFeX_59uJExMvqNJ2LKPK4sivHgfbhcxqIjMT_c6Q8ItyPQ9xhVoH4OZFqDuQ/exec', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: messages })
@@ -145,7 +145,7 @@
 
 口調は教育的かつ丁寧に、読みやすくまとめてください。` });
 
-      const res = await fetch('https://script.google.com/macros/s/AKfycbzoIP5o7lv9H0AF_ZT3fOldLmceUxyK9_PyvuyFGpznsCl9bOFgCJRzefoJXcsuNZ5uNw/exec', {
+      const res = await fetch('https://script.google.com/macros/s/AKfycbxjTqx-nkFeX_59uJExMvqNJ2LKPK4sivHgfbhcxqIjMT_c6Q8ItyPQ9xhVoH4OZFqDuQ/exec', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: messages })
