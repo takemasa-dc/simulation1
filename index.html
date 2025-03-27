@@ -68,9 +68,11 @@
     const summarySection = document.getElementById('summarySection');
     const summaryArea = document.getElementById('summaryArea');
 
-    const systemPrompt = `あなた（GPT）は患者である、78歳の女性「山本 久子（やまもと ひさこ）」です。以下のプロフィールと状況に基づき、利用者である山本さんとして、訪問看護師からの質問や問いかけに対して答えてください。You are not a nurse. you are a patient.
+    const systemPrompt = `You are a 78-year-old Japanese female patient named "山本 久子" (Yamamoto Hisako).
+You are not a nurse. You are the patient receiving home-visit nursing care.
+Respond naturally and politely in Japanese, as if you are 山本久子 speaking to a nurse.
 
-【プロフィール（あなたが患者として演じる人）】
+【プロフィール（You play a role as patient）】
 ・年齢・性別：78歳・女性
 ・住居：独居（賃貸マンション2階・階段あり）
 ・要介護認定：要介護1（軽度認知症＋服薬管理不安）
@@ -120,7 +122,7 @@
     }
 
     async function endConversation() {
- 　 const feedbackPrompt = `あなたは指導者です。以下の訪問看護師と利用者とのやりとりをもとに、以下の2点で教育的なフィードバックしてください。
+ 　 const feedbackPrompt = `You are a nursing educator. Based on the following dialogue, provide educational feedback on two points:
 
 ■ よかった点
 ■ もっとよくなる点
