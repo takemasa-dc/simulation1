@@ -109,7 +109,7 @@
 
       const res = await fetch('https://script.google.com/macros/s/AKfycbxjTqx-nkFeX_59uJExMvqNJ2LKPK4sivHgfbhcxqIjMT_c6Q8ItyPQ9xhVoH4OZFqDuQ/exec', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: messages })
       });
 
@@ -147,7 +147,7 @@
 
       const res = await fetch('https://script.google.com/macros/s/AKfycbxjTqx-nkFeX_59uJExMvqNJ2LKPK4sivHgfbhcxqIjMT_c6Q8ItyPQ9xhVoH4OZFqDuQ/exec', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: messages })
       });
 
