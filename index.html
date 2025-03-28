@@ -165,8 +165,9 @@ ${messages.map(m => `${m.role === 'user' ? '看護師' : '久子'}：${m.content
 }
 
 function renderMessage(content, sender) {
-  const matches = content.match(/「(＜^」＞+)」/g); // ＜〜＞にマッチする部分を抽出
-  const mainText = content.replace(/「[^」]+」/g, '').trim(); // 観察結果を除いた本体
+  // ＜〜＞にマッチする部分を抽出
+  const matches = content.match(/＜([^＞]+)＞/g);
+  const mainText = content.replace(/＜[^＞]+＞/g, '').trim(); // 観察結果を除いた本体
 
   if (mainText) {
     const div = document.createElement('div');
@@ -181,7 +182,7 @@ function renderMessage(content, sender) {
       resultDiv.className = 'message gpt';
       resultDiv.style.fontStyle = 'italic';
       resultDiv.style.backgroundColor = '#fff8dc'; // 薄い黄色
-      resultDiv.textContent = `【測定・観察結果】 ${result.replace(/「|」/g, '')}`;
+      resultDiv.textContent = `【測定・観察結果】 ${result.replace(/＜|＞/g, '')}`;
       chat.appendChild(resultDiv);
     });
   }
