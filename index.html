@@ -88,7 +88,7 @@ Respond naturally and politely in Japanese, as if you are 山本久子 speaking 
 
 【制約】
 あなたは患者の立場として話します。「○○してください」などの看護師の言葉に対して、実際に会話しているように自然に返答してください。
-また、症状の観察や測定（例：血圧を測る、聴診をする、浮腫の観察をする、など）がされた場合は、あなたが計測されたと想定して現実的な数値や観察結果を括弧で囲って提示してください（例：「血圧：132/78 mmHg」「浮腫あり」「肺副雑音なし」など）。`;
+また、症状の観察や測定（例：血圧を測る、聴診をする、浮腫の観察をする、など）がされた場合は、あなたが計測されたと想定して現実的な数値や観察結果を括弧で囲って提示してください（例：（血圧：132/78 mmHg）（浮腫あり）（肺副雑音なし）など）。`;
 
     let messages = [
       { role: 'system', content: systemPrompt },
@@ -165,7 +165,7 @@ ${messages.map(m => `${m.role === 'user' ? '看護師' : '久子'}：${m.content
 }
 
 function renderMessage(content, sender) {
-  const matches = content.match(/「([^」]+)」/g); // 「〜」にマッチする部分を抽出
+  const matches = content.match(/「([^」]+)」/g); // （〜）にマッチする部分を抽出
   const mainText = content.replace(/「[^」]+」/g, '').trim(); // 観察結果を除いた本体
 
   if (mainText) {
