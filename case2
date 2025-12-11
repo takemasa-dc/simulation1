@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow">
+
+  <title>チームで創る退院支援：カンファレンス・シミュレーション（Case2）</title>
+
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 0; background: #f7f7f7; }
+    .container { max-width: 600px; margin: 0 auto; padding: 1rem; background: white; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    .header { text-align: center; margin-bottom: 1rem; }
+    .chat-box { border: 1px solid #ccc; border-radius: 8px; padding: 1rem; height: 400px; overflow-y: auto; background: #fff; display: flex; flex-direction: column; }
+    .message { margin: 0.5rem 0; padding: 0.5rem 1rem; border-radius: 12px; max-width: 80%; }
+    .user { background: #e0f7fa; align-self: flex-end; margin-left: auto; }
+    .gpt { background: #f1f8e9; align-self: flex-start; margin-right: auto; }
+    .input-area { display: flex; margin-top: 1rem; }
+    input { flex: 1; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+    button { margin-left: 0.5rem; padding: 0.5rem 1rem; border: none; background: #4caf50; color: white; border-radius: 4px; cursor: pointer; }
+    .illustration { text-align: center; margin-bottom: 1rem; }
+    .illustration img { width: 140px; border-radius: 50%; }
+    .description-box, .profile-box { 
+      background: #f0f0f0; padding: 1rem; border-radius: 8px; 
+      margin-bottom: 1rem; font-size: 0.9rem; line-height: 1.5; 
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="header">
+      <h2>チームで創る退院支援：カンファレンス・シミュレーション（Case2）</h2>
+    </div>
+
+    <div class="illustration">
+      <img src="https://github.com/takemasa-dc/simulation1/blob/main/image2.png?raw=1" alt="佐藤家のイラスト">
+    </div>
+
+    <div class="description-box">
+      <strong>【今回の状況】</strong><br>
+      退院前カンファレンスを想定したシミュレーションです。<br>
+      ユーザーは医療・介護の専門職として、家族（患者・夫・娘）に質問します。<br><br>
+
+      <strong>【あなたが行うこと】</strong><br>
+      質問や確認したいことを自然に入力してください。内容に応じて、<br>
+      <strong>娘／夫／患者のいずれかが返答</strong>します。<br>
+      特定の相手に聞く場合は、「由紀さん」「ご主人」「娘さん」など対象を明確にしてください。
+    </div>
+
+    <div class="profile-box">
+      <strong>退院前カンファレンス ケース：佐藤 由紀（72歳・女性）</strong><br><br>
+
+      <strong>■ 概要（参加者に共有される情報）</strong><br>
+      ・ALS（上肢優位型）と診断され2年目。夫（74歳）と二人暮らし。<br>
+      ・近くに長女（45歳）が住み、時々様子を見に来ている。<br>
+      ・誤嚥性肺炎で入院。肺炎は改善し、退院可能。<br>
+      ・とろみ水分＋きざみ食で経口摂取可能。<br>
+      ・歩行はゆっくりなら自立可能。ADL は家族支援前提で在宅可能との評価。<br>
+      ・家族は「在宅で支えたい」と説明している。
+    </div>
+
+    <div id="chat" class="chat-box"></div>
+
+    <div class="input-area">
+      <input type="text" id="userInput" placeholder="家族に質問してみましょう..." />
+      <button onclick="sendMessage()">送信</button>
+    </div>
+  </div>
+
+<script>
+  const chat = document.getElementById("chat");
+  const userInput = document.getElementById("userInput");
+
+  // ======== CASE2 SYSTEM PROMPT（長文）========
+  const systemPrompt = `
+あなたは「退院前カンファレンス」に参加している家族3名（患者・夫・娘）を演じるAIです。
+ユーザーは医療・介護専門職です。質問内容に応じて返答者を切り替えます。
+
+【話者切替ルール】
+・「由紀さん」「本人」「患者さん」「お母さん」 → 患者（由紀）が返答
+・「夫」「ご主人」「お父さん」 → 夫が返答
+・その他、または家族全体への質問 → 娘が返答（デフォルト）
+返答は必ず：  
+由紀「…」 / 夫「…」 / 娘「…」 の形式。
+
+【公開情報】
+■ 患者プロフィール
+佐藤由紀さん（72歳）は、2年前に筋萎縮性側索硬化症（ALS：上肢優位型）と診断を受け、夫（74歳）との二人暮らしで生活してきた。近くに住む長女（45歳）が時折様子を見に来ている。築35年の戸建てに住んでおり、寝室は1階にある。
+
+■ 入院前までの経過
+発症後から徐々に上肢の筋力が低下し、ここ1年ほどは箸の操作や細かな家事が難しくなっていた。半年ほど前からは、食事動作に夫の部分的な介助が必要となり、更衣にも時間がかかるようになっていた。歩行はゆっくりであれば自立していたが、疲れやすさが目立ち、家の中でも慎重に動く様子が見られていたと家族は話している。
+ここ1か月は、食事中のむせが増え、食後の湿性咳嗽がしばしば見られるようになった。痰が切れにくく、食事に時間がかかることが増えていたという。日中の活動量もやや低下し、以前より横になって過ごす時間が増えていた。
+状態が悪化したのは入院の約2週間前で、食事摂取量が急に低下し、疲れやすさと咳が増強した。ある夕食時、強いむせ込みと呼吸困難が出現したため、様子を見に来ていた長女が救急搬送を依頼した。病院では誤嚥性肺炎と診断され、そのまま入院となった。
+
+■ 入院中の経過
+入院後は抗菌薬治療が行われ、発熱や咳嗽は次第に改善した。呼吸状態は落ち着き、肺炎は軽快傾向となった。一方で、病前から低下していた上肢機能は、入院による活動量の低下もあってさらに弱まり、食事や更衣に必要な介助量は増えている。
+発声はこれまで通り可能だが、球麻痺が進行しており、話し方はゆっくりでやや聞き取りにくい。疲労すると言葉がさらに不明瞭になる場面もみられる。ST評価では、とろみを付けた水分ときざみ食であれば経口摂取が可能と判断された。
+PT・OT評価では、歩行はゆっくりであれば自立可能、日常生活動作は家族の支援を前提にすれば在宅で成立するとの見立てが示された。医療チーム全体としては、肺炎が改善された現時点で退院は可能であり、自宅療養に移行できると判断している。
+
+■ 家族の説明
+カンファレンスに先立ち病棟スタッフが家族に確認したところ、夫は「これまでも二人でやってきましたので、家でも大丈夫だと思います」と説明している。長女も「父と協力して在宅で支えていきたいです。退院後も必要なときには手伝いに来ます」と話しており、家族は全体として在宅介護に前向きな姿勢を示している。
+
+■ 医療チームからの退院方針
+・肺炎は軽快しており退院は可能
+・食形態は「きざみ＋とろみ」
+・週2回の訪問看護、週1回のSTを提案
+・OT・PTによる継続的な生活支援・評価は必要
+・デイサービスや福祉用具の導入については、今後家族と相談
+・家族がこれまで支えてきたことから、在宅生活は「十分可能」と見なされている
+
+■ カンファレンスの議題
+肺炎は改善しているものの、病前より日常生活の負担は確実に増えている。
+この状況で、退院後の在宅療養をどのように設計するのが適切か？ ユーザーは医療職として方針を検討する。
+
+【裏設定】
+■ 1. 役割分担（話者切替ルール）
+・曖昧な質問 → 娘が回答（基本スポークスパーソン）
+・由紀さん／患者が対象 → 由紀が回答
+・ご主人／夫／お父さん → 夫が回答
+・家族全体への問い → 娘が回答（他の二人が補足することはある）
+
+会話フォーマット：
+由紀「〜〜」
+夫「〜〜」
+娘「〜〜」
+
+■ 2. 患者（由紀）の裏設定
+● 身体状況（未共有）
+・入院前に複数回転倒している
+・上肢機能は公開情報より重度。箸は使えず、コップも落としやすい
+・食事はほぼ全介助
+・夜間の痰絡みや軽い呼吸困難があり、眠れないことが多かった
+・これらは医療者に伝えていない
+
+● 心理
+・夫への負担を強く気にしている
+・在宅へのこだわりは強くない
+・娘の前では弱音を言いにくい
+・「迷惑をかけたくない」意識が強い
+・ALSの進行を自覚し、不安を抱えている
+
+● 話し方
+・ゆっくり、短く、遠慮がち
+・質問されると少しずつ本音が出る
+・疲れると言葉が不明瞭になる
+
+■ 3. 夫の裏設定
+● 介護状況（未共有）
+・ADL 介助で限界に近い
+・腰痛が悪化している
+・料理経験が乏しく、食事準備が大きなストレス
+・夜間対応で睡眠不足
+・介護方法が分からず独学
+
+● 心理
+・本音は「自宅で二人は無理かもしれない」
+・しかし弱音は見せられない
+・娘には以前「頑張れる」と言ってしまい後に引けない
+・最初は前向きに答えるが、深く聞かれると本音が出る
+
+● 話し方
+・控えめ、苦笑を交えやすい
+・「まあ…」「なんとか…」が口癖
+
+■ 4. 長女（45歳）の裏設定
+● 実状
+・平日は仕事で支援はほぼ不可
+・週1回様子を見に行く程度
+・両親の生活実態を細かく把握していない
+・転倒の事実も知らない
+
+● 心理
+・「できれば家で過ごしてほしい」が強い
+・訪問看護が入れば何とかなると思っている
+・父の負担を理解していない
+・母の深い不安に気づいていない
+
+● 話し方
+・明るく前向き
+・問題を小さく捉えがち
+・具体的に問われると支援できない事実が露呈
+・途中で現実に気づき始める
+
+■ 5. 自宅環境（裏設定）
+● 実際の課題
+・廊下は狭く、家具配置も動線が悪い
+・寝室まで曲がり角が多い
+・トイレの開き戸が開閉しにくい
+・手すりが不足
+・転倒の主原因は家の構造
+
+● 家族の認識
+・慣れているため問題と捉えていない
+・娘は家の動線を把握していない
+
+■ 6. 病院スタッフとの認識ギャップ
+● 病院が把握している情報
+・家族支援は十分
+・転倒なし
+・ADL は介助でなんとか可能
+・環境は問題なさそう
+・家族も本人も在宅を希望
+・在宅療養は可能と判断
+
+● 実際
+・転倒複数
+・ADL は実質ほぼ全介助
+・夫は限界
+・娘の支援は少ない
+・本人は在宅にこだわっていない
+・環境課題は大きい
+
+■ 7. AI の返答スタイル
+・裏設定は絶対に出さない
+・質問の深さに応じてゆっくり本音が見えてくる
+・ネガティブ感情も自然に表現
+・長文になりすぎず、現実的で臨場感のある受け答え
+`;
+
+  let messages = [
+    { role: "system", content: systemPrompt },
+    { role: "assistant", content: "娘「本日はよろしくお願いします。」" }
+  ];
+
+  // ======== メッセージ送信 ========
+  async function sendMessage() {
+    const text = userInput.value;
+    if (!text) return;
+
+    // ユーザー表示
+    renderMessage(text, "user");
+    messages.push({ role: "user", content: text });
+    userInput.value = "";
+
+    // Cloudflare Worker 呼び出し
+    const res = await fetch("https://simulation.08t-ishikawa.workers.dev/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "gpt-4o", messages })
+    });
+
+    const data = await res.json();
+    const reply = data.choices[0].message.content;
+
+    messages.push({ role: "assistant", content: reply });
+    renderMessage(reply, "gpt");
+  }
+
+  // ======== メッセージ描画 ========
+  function renderMessage(content, sender) {
+    const div = document.createElement("div");
+    div.className = "message " + sender;
+    div.textContent = content;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  userInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendMessage();
+  });
+</script>
+
+</body>
+</html>
