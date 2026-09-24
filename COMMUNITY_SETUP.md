@@ -33,7 +33,7 @@ Vercelの対象プロジェクト → Settings → Environment Variables に、�
 5. `/` の転送先が `/case2` であること、既存ページ・画像が変わっていないことを確認します。
 6. PRをマージすると通常のGit連携デプロイで本番へ反映されます。環境変数変更後は新しいデプロイが必要です。本PRでは本番マージ・本番設定変更は行いません。
 
-静的ファイルだけを配信するGitHub Pagesや通常のファイルサーバーではFunctionが動きません。Vercelで利用してください。
+静的ファイルだけを配信するGitHub Pages、Cloudflare Pages、通常のファイルサーバーではこのVercel Functionが動きません。本リポジトリではCloudflare Pagesの自動Previewも作られますが、新規チャットの利用先にはVercelのURLを使ってください。
 
 ## 50人程度での利用
 
