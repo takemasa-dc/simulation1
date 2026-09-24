@@ -59,6 +59,19 @@
 <div class="actions"><button type="button" id="reset" class="secondary">最初からやり直す</button><button type="submit" id="send">送信</button></div>
 </form>
 <p id="status" role="status" aria-live="polite">質問を入力して、面談を始めてください。</p>
+<section class="copy-box" aria-labelledby="copyTitle">
+<h2 id="copyTitle">Moodleへの提出</h2>
+<p>面談後は「会話ログをコピー」を押し，Moodleの提出欄に貼り付けて提出してください．</p>
+<p><strong>再読み込みや画面を閉じると会話が消えます。閉じる前にコピー・提出を済ませてください。</strong></p>
+<button type="button" id="copyLog" disabled>会話ログをコピー</button>
+<p id="copyStatus" role="status" aria-live="polite">まだ会話がありません。回答を受け取るとコピーできます。</p>
+<div id="manualCopy" hidden>
+<label for="logText">手動コピー用の会話ログ（全文）</label>
+<textarea id="logText" readonly rows="10" aria-describedby="manualHint"></textarea>
+<button type="button" id="selectLog" class="secondary">会話ログを全選択</button>
+<p id="manualHint" class="hint">全選択後、PCではCtrl＋C（Macは⌘＋C）、スマートフォンでは選択範囲を長押しして「コピー」を選び、Moodleの提出欄に貼り付けてください。</p>
+</div>
+</section>
 <noscript>このチャットを利用するにはJavaScriptを有効にしてください。</noscript>
 </section>
 </main>

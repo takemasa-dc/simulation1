@@ -27,4 +27,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .hint { font-size: .8rem; color: #526158; }
 #status { min-height: 1.7em; font-size: .9rem; margin: .6rem 0; }
 #status.error { color: #a02424; }
+.copy-box { margin-top: 1rem; padding: 1rem; border: 1px solid #bcc9c0; border-radius: 8px; background: #f0f3f0; }
+#copyStatus { font-size: .9rem; overflow-wrap: anywhere; }
+#logText { min-height: 220px; margin-bottom: .5rem; }
 @media (max-width: 420px) { .container { padding: .75rem; } .message { max-width: 95%; } }
