@@ -35,7 +35,7 @@
         const name = caseId === 'A' ? names[questionTargets[index / 2]] : undefined;
         const prefix = name ? `【質問先：${name}】\n` : '';
         const text = prefix && message.content.startsWith(prefix) ? message.content.slice(prefix.length) : message.content;
-        return `学生${name ? `（${name}へ）` : ''}：\n${text}`;
+        return `看護師${name ? `（${name}へ）` : ''}：\n${text}`;
       }
       // The API returns one or more named utterances, including both speakers in A.
       // Keep the original text intact if it does not match that format.

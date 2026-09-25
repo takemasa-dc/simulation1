@@ -107,11 +107,11 @@ test('A copies full ordered text with mother, son and all selected recipients, w
   await complete(s,'好きなことは？','健太「写真です。」','kenta');
   await complete(s,'これからは？','和子「ここで暮らしたいです。」\n健太「僕もです。」','both');
   await s.copy();
-  assert.equal(s.copied[0], '地域包括ケア演習 事例A\n精神疾患のある息子と暮らす高齢女性の地域生活\n\n【会話ログ】\n学生（和子さんへ）：\n普段は？\n\n和子：\n花の世話をしています。\n\n学生（健太さんへ）：\n好きなことは？\n\n健太：\n写真です。\n\n学生（お二人へ）：\nこれからは？\n\n和子：\nここで暮らしたいです。\n\n健太：\n僕もです。');
+  assert.equal(s.copied[0], '地域包括ケア演習 事例A\n精神疾患のある息子と暮らす高齢女性の地域生活\n\n【会話ログ】\n看護師（和子さんへ）：\n普段は？\n\n和子：\n花の世話をしています。\n\n看護師（健太さんへ）：\n好きなことは？\n\n健太：\n写真です。\n\n看護師（お二人へ）：\nこれからは？\n\n和子：\nここで暮らしたいです。\n\n健太：\n僕もです。');
   assert.equal(s.elements.copyStatus.textContent,'会話ログをコピーしました．Moodleの提出欄に貼り付けてください．');
   assert.equal(s.elements.chat.children.length,6);
   await complete(s,'自動の質問','和子「はい。」');await s.copy();
-  assert.match(s.copied[1],/学生：\n自動の質問\n\n和子：\nはい。$/);
+  assert.match(s.copied[1],/看護師：\n自動の質問\n\n和子：\nはい。$/);
   const sent=JSON.parse(s.requests[3].options.body);
   assert.equal(sent.history.length,6);
   assert.deepEqual(Object.keys(sent.history[0]),['role','content']);
@@ -125,7 +125,7 @@ test('B copies Masao and multiline literal text; failed and pending questions ne
   await s.copy();assert.doesNotMatch(s.copied[0],/失敗/);
   s.reply(1,502,{error:'API error secret'});await failed;
   await s.copy();
-  assert.equal(s.copied[1],'地域包括ケア演習 事例B\n免許返納をきっかけに生活が変化した独居高齢男性の地域生活\n\n【会話ログ】\n学生：\n昔の仕事は？\n教えてください。\n\n正夫：\n建設の仕事や。');
+  assert.equal(s.copied[1],'地域包括ケア演習 事例B\n免許返納をきっかけに生活が変化した独居高齢男性の地域生活\n\n【会話ログ】\n看護師：\n昔の仕事は？\n教えてください。\n\n正夫：\n建設の仕事や。');
   assert.doesNotMatch(s.copied[1],/API|secret|失敗/);
   assert.equal(s.elements.userInput.value,'失敗した質問');
   await complete(s,'<b>文字のまま</b>','正夫「そうや。」');await s.copy();
