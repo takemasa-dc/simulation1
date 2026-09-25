@@ -1,0 +1,33 @@
+* { box-sizing: border-box; }
+body { font-family: system-ui, sans-serif; margin: 0; color: #26332d; background: #f7f7f7; line-height: 1.7; }
+.container { max-width: 680px; margin: 0 auto; padding: 1rem; background: white; box-shadow: 0 0 10px #00000012; }
+.header { text-align: center; margin-bottom: 1rem; }
+h1 { font-size: 1.35rem; margin: .5rem 0; }
+.subtitle { margin: .25rem 0; font-size: 1rem; }
+.illustration { text-align: center; }
+.illustration img { width: 180px; height: 180px; object-fit: contain; border-radius: 12px; }
+.profile-box, .description-box { background: #f0f3f0; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: .95rem; }
+h2 { font-size: 1rem; margin: 0 0 .5rem; }
+p { margin: .5rem 0; }
+summary { cursor: pointer; font-weight: bold; padding: .25rem 0; }
+.chat-box { border: 1px solid #bcc9c0; border-radius: 8px; padding: .75rem; height: 400px; height: min(50dvh, 440px); min-height: 220px; overflow-y: auto; display: flex; flex-direction: column; }
+.message { margin: .4rem 0; padding: .6rem .9rem; border-radius: 12px; max-width: 90%; white-space: pre-wrap; overflow-wrap: anywhere; }
+.user { background: #e0f7fa; align-self: flex-end; }
+.gpt { background: #f1f8e9; align-self: flex-start; }
+label { display: block; font-weight: 600; margin-top: .6rem; }
+select, textarea, button { font: inherit; font-size: 16px; }
+select, textarea { border: 1px solid #9aa99e; border-radius: 6px; padding: .6rem; background: white; color: inherit; }
+select { max-width: 100%; }
+textarea { width: 100%; min-height: 90px; resize: vertical; }
+.actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .75rem; margin-top: .5rem; }
+button { padding: .6rem 1rem; border: 1px solid #2e713d; background: #327b42; color: white; border-radius: 6px; cursor: pointer; min-height: 44px; }
+button.secondary { background: white; color: #315e3b; }
+button:disabled { opacity: .55; cursor: not-allowed; }
+:focus-visible { outline: 3px solid #22699f; outline-offset: 3px; }
+.hint { font-size: .8rem; color: #526158; }
+#status { min-height: 1.7em; font-size: .9rem; margin: .6rem 0; }
+#status.error { color: #a02424; }
+.copy-box { margin-top: 1rem; padding: 1rem; border: 1px solid #bcc9c0; border-radius: 8px; background: #f0f3f0; }
+#copyStatus { font-size: .9rem; overflow-wrap: anywhere; }
+#logText { min-height: 220px; margin-bottom: .5rem; }
+@media (max-width: 420px) { .container { padding: .75rem; } .message { max-width: 95%; } }
