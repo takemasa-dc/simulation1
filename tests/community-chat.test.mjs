@@ -38,6 +38,8 @@ test('server validation, isolation, upstream errors and 50 independent requests'
     assert.equal(upstream.url, 'https://simulation.08t-ishikawa.workers.dev/');
     assert.equal(upstream.model, 'gpt-4o-mini');
     assert.match(upstream.messages[0].content, /PRIVATE_A_SENTINEL/);
+    assert.match(upstream.messages[0].content, /地域包括支援センターの看護師/);
+    assert.doesNotMatch(upstream.messages[0].content, /看護学生|学生/);
     assert.doesNotMatch(upstream.messages[0].content, /PRIVATE_B_SENTINEL/);
     assert.deepEqual(upstream.messages.slice(1, 3), history);
     assert.match(upstream.messages.at(-1).content, /質問先：健太さん/);
