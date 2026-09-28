@@ -58,6 +58,8 @@ test('server validation, isolation, upstream errors and 50 independent requests'
     assert.equal(res.statusCode, 200);
     assert.match(upstream.messages[0].content, /現在の関係状態：guarded/);
     assert.match(upstream.messages[0].content, /明確な謝罪があるまで/);
+    assert.match(upstream.messages[0].content, /質問された事実部分に答えず/);
+    assert.ok(upstream.messages[0].content.lastIndexOf('現在の関係状態：guarded') > upstream.messages[0].content.lastIndexOf('【事例資料】'));
     assert.doesNotMatch(upstream.messages.at(-1).content, /関係状態|guarded/);
 
     const history = [
