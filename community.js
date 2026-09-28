@@ -94,6 +94,7 @@
     node.textContent = text;
     chat.appendChild(node);
     chat.scrollTop = chat.scrollHeight;
+    return node;
   }
   function announce(text, error = false) {
     status.textContent = text;
@@ -129,6 +130,7 @@
     const names = { kazuko: '和子さんへ', kenta: '健太さんへ', both: 'お二人へ' };
     const currentGeneration = generation;
     const controller = new AbortController();
+    let latestReply;
     pending = controller;
     updateControls();
     announce('回答を待っています…');
@@ -154,7 +156,7 @@
       questionTargets.push(selected);
       refreshCopyLog();
       render(names[selected] ? `${names[selected]}\n${text}` : text, 'user');
-      render(data.reply, 'gpt');
+      latestReply = render(data.reply, 'gpt');
       input.value = '';
       announce(history.length >= MAX_TURNS * 2 ? '60回の対話が終了しました。履歴を確認し、続ける場合は最初からやり直してください。' : '');
     } catch (error) {
@@ -164,7 +166,15 @@
         : (error instanceof TypeError ? '接続できませんでした。通信環境を確認して再度送信してください。' : error.message), true);
     } finally {
       clearTimeout(timeout);
-      if (currentGeneration === generation) { pending = null; updateControls(); input.focus(); }
+      if (currentGeneration === generation) {
+        pending = null;
+        updateControls();
+        if (latestReply && window.matchMedia?.('(max-width: 600px)').matches) {
+          latestReply.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+        } else {
+          input.focus();
+        }
+      }
     }
   });
   input.addEventListener('keydown', event => {
@@ -184,7 +194,7 @@
     refreshCopyLog();
     chat.replaceChildren();
     input.value = '';
-    if (target) target.value = 'auto';
+    if (target) target.value = caseId === 'A' ? 'kazuko' : 'auto';
     // Keep a rate-limit cooldown even when the conversation is reset.
     if (Date.now() >= blockedUntil) announce('新しい面談です。質問を入力してください。');
     updateControls(); input.focus();
