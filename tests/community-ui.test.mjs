@@ -4,24 +4,25 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 const source = readFileSync(new URL('../community.js', import.meta.url), 'utf8');
 
-function screen(caseId = 'A', clipboard) {
+function screen(caseId = 'A', clipboard, compact = false) {
   const elements = {};
   const make = () => ({
     value: '', textContent: '', className: '', disabled: false, hidden: true, children: [], events: {},
     addEventListener(name, fn) { this.events[name] = fn; },
-    appendChild(node) { this.children.push(node); }, replaceChildren() { this.children = []; }, focus() {},
+    appendChild(node) { this.children.push(node); }, replaceChildren() { this.children = []; }, focus() { this.focused = true; },
+    scrollIntoView(options) { this.scrolledIntoView = options; },
     select() { this.selected = true; }, setSelectionRange(start, end) { this.selection = [start, end]; },
     requestSubmit() { return this.events.submit({ preventDefault() {} }); }
   });
   for (const id of ['chat','chatForm','userInput','target','send','reset','status','copyLog','copyStatus','manualCopy','logText','selectLog']) elements[id] = make();
-  elements.target.value = 'auto';
+  elements.target.value = caseId === 'A' ? 'kazuko' : 'auto';
   const requests = [];
   const intervals = new Map();
   const copied = [];
   let time = 1000, timer = 0, confirms = true;
   vm.runInNewContext(source, {
     document: { body: { dataset: {case:caseId} }, getElementById: id => elements[id], createElement: make },
-    window: { confirm: () => confirms }, AbortController, TypeError,
+    window: { confirm: () => confirms, matchMedia: () => ({ matches: compact }) }, AbortController, TypeError,
     navigator: { clipboard: clipboard === null ? undefined : clipboard || { writeText: async text => { copied.push(text); } } },
     Date: { now: () => time },
     setTimeout: () => ++timer, clearTimeout() {},
@@ -91,12 +92,13 @@ test('IME Enter never sends; plain Enter is newline; Ctrl+Enter sends; tabs stay
   a.reset();assert.equal(b.elements.chat.children.length,2);
 });
 
-async function complete(s, question, reply, target = 'auto') {
+async function complete(s, question, reply, target) {
   s.elements.userInput.value = question;
-  s.elements.target.value = target;
+  if (target) s.elements.target.value = target;
+  const selected = s.elements.target.value;
   const send = s.submit();
   const names = { kazuko:'和子さん', kenta:'健太さん', both:'お二人' };
-  s.reply(s.requests.length - 1, 200, { reply, userMessage: names[target] ? `【質問先：${names[target]}】\n${question}` : question });
+  s.reply(s.requests.length - 1, 200, { reply, userMessage: names[selected] ? `【質問先：${names[selected]}】\n${question}` : question });
   await send;
 }
 test('A copies full ordered text with mother, son and all selected recipients, without changing API history', async () => {
@@ -110,8 +112,8 @@ test('A copies full ordered text with mother, son and all selected recipients, w
   assert.equal(s.copied[0], '地域包括ケア演習 事例A\n精神疾患のある息子と暮らす高齢女性の地域生活\n\n【会話ログ】\n看護師（和子さんへ）：\n普段は？\n\n和子：\n花の世話をしています。\n\n看護師（健太さんへ）：\n好きなことは？\n\n健太：\n写真です。\n\n看護師（お二人へ）：\nこれからは？\n\n和子：\nここで暮らしたいです。\n\n健太：\n僕もです。');
   assert.equal(s.elements.copyStatus.textContent,'会話ログをコピーしました．Moodleの提出欄に貼り付けてください．');
   assert.equal(s.elements.chat.children.length,6);
-  await complete(s,'自動の質問','和子「はい。」');await s.copy();
-  assert.match(s.copied[1],/看護師：\n自動の質問\n\n和子：\nはい。$/);
+  await complete(s,'初期値の質問','和子「はい。」','kazuko');await s.copy();
+  assert.match(s.copied[1],/看護師（和子さんへ）：\n初期値の質問\n\n和子：\nはい。$/);
   const sent=JSON.parse(s.requests[3].options.body);
   assert.equal(sent.history.length,6);
   assert.deepEqual(Object.keys(sent.history[0]),['role','content']);
@@ -159,4 +161,14 @@ test('a reply arriving while copying does not alter the snapshot; next copy incl
   await complete(s,'質問2','正夫「回答2」');resolveCopy();await copy;
   assert.doesNotMatch(texts[0],/回答2/);assert.match(s.elements.copyStatus.textContent,/もう一度/);
   const next=s.copy();resolveCopy();await next;assert.match(texts[1],/回答1[\s\S]*回答2/);
+});
+test('A defaults and resets to Kazuko; mobile success reveals the latest reply', async () => {
+  const s=screen('A',undefined,true),e=s.elements;
+  assert.equal(e.target.value,'kazuko');
+  await complete(s,'こんにちは','和子「こんにちは。」');
+  assert.equal(JSON.parse(s.requests[0].options.body).target,'kazuko');
+  assert.equal(e.chat.children.at(-1).scrolledIntoView.behavior,'smooth');
+  assert.equal(e.chat.children.at(-1).scrolledIntoView.block,'center');
+  assert.equal(e.userInput.focused,undefined);
+  s.reset();assert.equal(e.target.value,'kazuko');
 });
