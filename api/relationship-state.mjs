@@ -14,6 +14,12 @@ const CASE_B_OFFENSES = [
   /(?:黙って|言うことを聞いて|さっさと)[^。！？]{0,20}(?:しろ|しなさい|して)/u
 ];
 
+const CASE_B_CLEAR_CASUAL = [
+  /(?:してる|やってる|行ってる|飲んでる|食べてる|困ってる|心配なの|無理なの|できるの|するの|したの|だったの)(?:の)?(?:[？?]|$)/u,
+  /(?:どうして|どうやって|どこで|いつ)[^。！？]{0,32}(?:する|した|行く|なった)(?:の)?(?:[？?]|$)/u,
+  /(?:だよね|だろ|じゃん)(?:[？?]|$)/u
+];
+
 const CASE_A_SEVERE = [
   /(?:何も|なにも)(?:できない|出来ない)/u,
   /(?:統合失調症|精神疾患|精神病)[^。！？]{0,36}(?:危険|無能力|何もできない|入院(?:が)?必要|一人では無理)/u,
@@ -51,12 +57,17 @@ function classify(caseId, raw, fallbackTarget) {
   const text = withoutAddress(raw);
   const apology = EXPLICIT_APOLOGY.test(text) || (caseId === 'A' && CASE_A_REPHRASE.test(text));
   if (caseId === 'B') {
-    return { apology, offense: CASE_B_OFFENSES.some(pattern => pattern.test(text)), severe: false };
+    return {
+      apology,
+      offense: CASE_B_OFFENSES.some(pattern => pattern.test(text)),
+      casual: CASE_B_CLEAR_CASUAL.some(pattern => pattern.test(text)),
+      severe: false
+    };
   }
   const target = targetFrom(raw, fallbackTarget);
   const severe = CASE_A_SEVERE.some(pattern => pattern.test(text));
   const offense = severe || CASE_A_OFFENSES.some(pattern => pattern.test(text)) || isComplexForKenta(text, target);
-  return { apology, offense, severe };
+  return { apology, offense, casual: false, severe };
 }
 
 function userTurns(history, message, target) {
@@ -70,7 +81,7 @@ export function evaluateRelationship(caseId, history, message, target = 'auto') 
   let offenseCount = 0;
   let recoveryProgress = 0;
   let recoveryNeeded = 0;
-  let current = { apology: false, offense: false, severe: false };
+  let current = { apology: false, offense: false, casual: false, severe: false };
 
   for (const turn of userTurns(history, message, target)) {
     current = classify(caseId, turn.text, turn.target);
@@ -94,6 +105,8 @@ export function evaluateRelationship(caseId, history, message, target = 'auto') 
 
     if (state === 'recovering') {
       if (current.apology) continue;
+      // A clear casual form after apologizing is not evidence that Masao's trust has recovered.
+      if (caseId === 'B' && current.casual) continue;
       recoveryProgress += 1;
       if (recoveryProgress >= recoveryNeeded) {
         state = 'neutral';
@@ -120,6 +133,9 @@ export function relationshipInstruction(caseId, result) {
       return `${header}\n現在、正夫は看護師のこれまでの話し方に警戒している。このターンでは質問された事実部分に答えず、新しい生活上の具体的情報も述べない。質問内容への回答より警戒を必ず優先し、一文程度で、質問の意図を問い返すか、話し方への不快感を示す。明確な謝罪があるまでこの応答方針を続け、丁寧な質問や話題変更だけでは警戒を解かない。${hidden}`;
     }
     if (result.state === 'recovering') {
+      if (result.current.casual) {
+        return `${header}\n正夫は謝罪を受けた後も看護師の明確なため口が続いたため、まだ警戒を解いていない。この発言を回復につながる丁寧な関わりとは扱わず、短く慎重に答える。明確な失礼や決めつけでなければguardedへ戻す必要はないが、通常の情報提供へはまだ戻らない。${hidden}`;
+      }
       return `${header}\n正夫は明確な謝罪を受けたが、まだ慎重に相手を見ている。回答は短めにし、丁寧な関わりが続くにつれて少しずつ通常の情報提供へ戻る。一度の謝罪だけで急に親しげにならない。${hidden}`;
     }
     return `${header}\n正夫は現時点で看護師を特に警戒していない。人物設定に従い、質問に応じて本人の生活経験を自然な長さで話す。${hidden}`;

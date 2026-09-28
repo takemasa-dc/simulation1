@@ -46,6 +46,27 @@ test('case B recovers quickly after one offense and reset starts neutral', () =>
   assert.equal(evaluateRelationship('B', [], '病院にはどのように行かれていますか？').state, 'neutral');
 });
 
+test('case B does not return to neutral when clear casual speech continues after an apology', () => {
+  let history = add([], 'なんで免許返納したの？');
+  history = add(history, '先ほどは失礼しました．言い方がよくありませんでした');
+  let result = evaluateRelationship('B', history, 'じゃあ病院にはどうやって行ってるの？');
+  assert.equal(result.state, 'recovering');
+  assert.equal(result.recoveryProgress, 0);
+  assert.equal(result.current.casual, true);
+  assert.match(relationshipInstruction('B', result), /回復につながる丁寧な関わりとは扱わず/);
+
+  history = add(history, 'じゃあ病院にはどうやって行ってるの？');
+  result = evaluateRelationship('B', history, '病院にはどのように行かれていますか？');
+  assert.equal(result.state, 'neutral');
+});
+
+test('case B returns to guarded when a clearly disrespectful form follows an apology', () => {
+  let history = add([], 'なんで免許返納したの？');
+  history = add(history, '申し訳ありませんでした');
+  const result = evaluateRelationship('B', history, 'ちゃんと薬飲んでる？');
+  assert.equal(result.state, 'guarded');
+});
+
 test('case B recognizes the specified disrespect patterns without treating every plain form as rude', () => {
   for (const message of [
     'なんで免許返納したの？',
