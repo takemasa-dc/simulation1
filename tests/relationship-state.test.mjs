@@ -129,3 +129,82 @@ test('case A repeated overly complex questions to Kenta become guarded and rephr
   result = evaluateRelationship('A', history, '質問を言い換えます．普段好きなことを一つ教えていただけますか？', 'kenta');
   assert.equal(result.state, 'recovering');
 });
+
+test('A-1 and A-2: bare direct address is disrespectful but honorific address is not', () => {
+  const bare = evaluateRelationship('A', [], '健太はどうなの？', 'kenta');
+  assert.equal(bare.current.offense, true);
+  assert.equal(bare.state, 'guarded');
+  assert.deepEqual(bare.affected, ['kenta']);
+
+  const honorific = evaluateRelationship('A', [], '健太さんはどうですか？', 'kenta');
+  assert.equal(honorific.current.offense, false);
+  assert.equal(honorific.state, 'neutral');
+});
+
+test('A-3 and A-4: Kazuko counts a bare reference as mild and denigration as severe', () => {
+  const bareReference = evaluateRelationship('A', [], '健太は仕事してるの？', 'kazuko');
+  assert.equal(bareReference.current.offense, true);
+  assert.equal(bareReference.current.severe, false);
+  assert.equal(bareReference.state, 'neutral');
+  assert.deepEqual(bareReference.affected, ['kazuko']);
+
+  const denigration = evaluateRelationship('A', [], '健太は怠けている？', 'kazuko');
+  assert.equal(denigration.current.severe, true);
+  assert.equal(denigration.state, 'guarded');
+  assert.deepEqual(denigration.affected, ['kazuko']);
+});
+
+test('A-5 and A-6: ability denial and treating Kenta as an obstacle immediately guard affected people', () => {
+  const abilityDenial = evaluateRelationship('A', [], 'どうして？仕事もできないのに？', 'kenta');
+  assert.equal(abilityDenial.current.severe, true);
+  assert.equal(abilityDenial.state, 'guarded');
+  assert.deepEqual(abilityDenial.affected, ['kenta']);
+
+  const obstacle = evaluateRelationship('A', [], 'でも健太さんは邪魔じゃないの？', 'both');
+  assert.equal(obstacle.current.severe, true);
+  assert.equal(obstacle.state, 'guarded');
+  assert.deepEqual(obstacle.affected, ['kazuko', 'kenta']);
+  const instruction = relationshipInstruction('A', obstacle);
+  assert.match(instruction, /和子と健太の双方/);
+  assert.match(instruction, /通常どおり詳しく答えることよりも、その不快感を自然に示すことを優先/);
+  assert.match(instruction, /能力・病歴・家族関係を丁寧に説明して看護師を納得させようとしない/);
+});
+
+test('A-7: one ordinary casual question does not trigger case A', () => {
+  for (const message of ['何か困ってる？', 'いつから痛いの？']) {
+    const result = evaluateRelationship('A', [], message, 'kenta');
+    assert.equal(result.current.offense, false, message);
+    assert.equal(result.state, 'neutral', message);
+  }
+});
+
+test('A-8 through A-10: repeated mild bare address guards, persists, then recovers after repair', () => {
+  let history = add([], '【質問先：和子さん】\n健太は元気？');
+  let result = evaluateRelationship('A', history, '健太はどう過ごしてる？', 'kazuko');
+  assert.equal(result.state, 'guarded');
+  assert.deepEqual(result.affected, ['kazuko']);
+
+  history = add(history, '【質問先：和子さん】\n健太はどう過ごしてる？');
+  result = evaluateRelationship('A', history, '普段の暮らしについて教えていただけますか？', 'kazuko');
+  assert.equal(result.state, 'guarded');
+
+  history = add(history, '【質問先：和子さん】\n普段の暮らしについて教えていただけますか？');
+  result = evaluateRelationship('A', history, '失礼しました．健太さんの日頃の過ごし方を教えていただけますか？', 'kazuko');
+  assert.equal(result.state, 'recovering');
+
+  history = add(history, '【質問先：和子さん】\n失礼しました．健太さんの日頃の過ごし方を教えていただけますか？');
+  result = evaluateRelationship('A', history, '和子さんご自身は普段どのように過ごされていますか？', 'kazuko');
+  assert.equal(result.state, 'neutral');
+  assert.deepEqual(result.affected, []);
+});
+
+test('case A keeps neutral employment and facility questions unflagged', () => {
+  for (const message of [
+    '仕事はしていないんですか？',
+    '施設について考えたことはありますか？'
+  ]) {
+    const result = evaluateRelationship('A', [], message, 'kenta');
+    assert.equal(result.current.offense, false, message);
+    assert.equal(result.state, 'neutral', message);
+  }
+});
