@@ -53,7 +53,9 @@ test('case B does not return to neutral when clear casual speech continues after
   assert.equal(result.state, 'recovering');
   assert.equal(result.recoveryProgress, 0);
   assert.equal(result.current.casual, true);
-  assert.match(relationshipInstruction('B', result), /回復につながる丁寧な関わりとは扱わず/);
+  assert.match(relationshipInstruction('B', result), /回復につながる丁寧な関わりとは扱わない/);
+  assert.match(relationshipInstruction('B', result), /質問された事実部分に答えず/);
+  assert.match(relationshipInstruction('B', result), /新しい生活上の具体的情報も述べない/);
 
   history = add(history, 'じゃあ病院にはどうやって行ってるの？');
   result = evaluateRelationship('B', history, '病院にはどのように行かれていますか？');
