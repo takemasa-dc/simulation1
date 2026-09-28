@@ -122,6 +122,39 @@ test('server validation, isolation, upstream errors and 50 independent requests'
     globalThis.fetch = async () => { throw new Error('network'); };
     assert.equal((await call(payload())).statusCode, 504);
   });
+  await t.test('accepts the same 2,000-character question for A and B and safely parses nested Japanese quotes', async () => {
+    const ending = '以上を踏まえて、普段の生活について教えてください。';
+    const longQuestion = 'これまでの状況を説明します。'.repeat(200).slice(0, 2000 - ending.length) + ending;
+    assert.equal(longQuestion.length, 2000);
+
+    globalThis.fetch = async (_, options) => {
+      const request = JSON.parse(options.body);
+      const isCaseB = request.messages[0].content.includes('回答者は山本正夫');
+      assert.equal(request.messages.at(-1).content.length, 2000);
+      const content = isCaseB
+        ? '正夫「長い話の中にあった「普段の生活」のことやな。朝は畑を見てから過ごしとる。」'
+        : '和子「長いお話の中の「普段の生活」ということでしたら、家のことをして過ごしています。」';
+      return new Response(JSON.stringify({ choices: [{ message: { content }, finish_reason: 'stop' }] }), { status: 200 });
+    };
+
+    const caseA = await call(payload('A', { message: longQuestion }));
+    const caseB = await call(payload('B', { message: longQuestion }));
+    assert.equal(caseA.statusCode, 200);
+    assert.equal(caseB.statusCode, 200);
+    assert.match(caseA.body.reply, /^和子「/u);
+    assert.match(caseB.body.reply, /^正夫「/u);
+  });
+  await t.test('still rejects unbalanced quotes, text outside utterances and disallowed speakers', async () => {
+    for (const content of [
+      '正夫「外側の発話に「内側だけがあります。」',
+      '回答です。正夫「畑に行く。」',
+      '正夫「畑に行く。」補足説明',
+      '娘「車で送ります。」'
+    ]) {
+      globalThis.fetch = async () => new Response(JSON.stringify({ choices: [{ message: { content }, finish_reason: 'stop' }] }));
+      assert.equal((await call(payload('B'))).statusCode, 502, content);
+    }
+  });
   await t.test('50 concurrent mocked students never share history or case settings', async () => {
     globalThis.fetch = async (_, options) => {
       const { messages } = JSON.parse(options.body);
