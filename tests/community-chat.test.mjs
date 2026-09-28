@@ -28,7 +28,10 @@ test('server validation, isolation, upstream errors and 50 independent requests'
   const mockSuccess = async (url, options) => {
     calls++;
     upstream = { url, ...JSON.parse(options.body) };
-    return new Response(JSON.stringify({ choices: [{ message: { content: upstream.messages.at(-1).content.includes('質問先：健太さん') ? '健太「こんにちは。」' : '和子「こんにちは。」' }, finish_reason: 'stop' }] }));
+    const content = upstream.messages[0].content.includes('回答者は山本正夫')
+      ? '正夫「こんにちは。」'
+      : upstream.messages.at(-1).content.includes('質問先：健太さん') ? '健太「こんにちは。」' : '和子「こんにちは。」';
+    return new Response(JSON.stringify({ choices: [{ message: { content }, finish_reason: 'stop' }] }));
   };
   globalThis.fetch = mockSuccess;
   await t.test('preserves all history, target, model; sends private settings only upstream', async () => {
@@ -39,6 +42,7 @@ test('server validation, isolation, upstream errors and 50 independent requests'
     assert.equal(upstream.model, 'gpt-4o-mini');
     assert.match(upstream.messages[0].content, /PRIVATE_A_SENTINEL/);
     assert.match(upstream.messages[0].content, /地域包括支援センターの看護師/);
+    assert.match(upstream.messages[0].content, /現在の関係状態：neutral/);
     assert.doesNotMatch(upstream.messages[0].content, /看護学生|学生/);
     assert.doesNotMatch(upstream.messages[0].content, /PRIVATE_B_SENTINEL/);
     assert.deepEqual(upstream.messages.slice(1, 3), history);
@@ -48,6 +52,24 @@ test('server validation, isolation, upstream errors and 50 independent requests'
     process.env.COMMUNITY_MODEL = 'alternate-compatible-model';
     await call(payload());
     assert.equal(upstream.model, 'alternate-compatible-model');
+  });
+  await t.test('adds the recalculated relationship state only to the server-side system prompt', async () => {
+    let res = await call(payload('B', { message: 'なんで免許返納したの？' }));
+    assert.equal(res.statusCode, 200);
+    assert.match(upstream.messages[0].content, /現在の関係状態：guarded/);
+    assert.match(upstream.messages[0].content, /明確な謝罪があるまで/);
+    assert.doesNotMatch(upstream.messages.at(-1).content, /関係状態|guarded/);
+
+    const history = [
+      { role: 'user', content: 'なんで免許返納したの？' },
+      { role: 'assistant', content: '正夫「……何でそんな聞き方をするんや。」' }
+    ];
+    res = await call(payload('B', { history, message: '病院にはどのように行かれていますか？' }));
+    assert.equal(res.statusCode, 200);
+    assert.match(upstream.messages[0].content, /現在の関係状態：guarded/);
+    res = await call(payload('B', { history, message: '先ほどは失礼しました．言い方がよくありませんでした' }));
+    assert.equal(res.statusCode, 200);
+    assert.match(upstream.messages[0].content, /現在の関係状態：recovering/);
   });
   await t.test('rejects malformed, injected roles, oversized and cross-origin input without API calls', async () => {
     const before = calls;
