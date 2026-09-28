@@ -60,6 +60,9 @@ test('server validation, isolation, upstream errors and 50 independent requests'
     assert.match(upstream.messages[0].content, /明確な謝罪があるまで/);
     assert.match(upstream.messages[0].content, /質問された事実部分に答えず/);
     assert.ok(upstream.messages[0].content.lastIndexOf('現在の関係状態：guarded') > upstream.messages[0].content.lastIndexOf('【事例資料】'));
+    assert.equal(upstream.messages.at(-2).role, 'system');
+    assert.match(upstream.messages.at(-2).content, /今回の応答で最優先する関係状態/);
+    assert.match(upstream.messages.at(-2).content, /現在の関係状態：guarded/);
     assert.doesNotMatch(upstream.messages.at(-1).content, /関係状態|guarded/);
 
     const history = [
@@ -124,8 +127,10 @@ test('server validation, isolation, upstream errors and 50 independent requests'
       const { messages } = JSON.parse(options.body);
       const last = messages.at(-1).content;
       const id = Number(last.split('student-')[1]);
-      assert.equal(messages.length, 2);
+      assert.equal(messages.length, 3);
       assert.match(messages[0].content, id%2 ? /PRIVATE_B_SENTINEL/ : /PRIVATE_A_SENTINEL/);
+      assert.equal(messages[1].role, 'system');
+      assert.match(messages[1].content, /今回の応答で最優先する関係状態/);
       await new Promise(resolve => setTimeout(resolve, id%5));
       return new Response(JSON.stringify({ choices: [{ message: { content: `${id%2?'正夫':'和子'}「${last}」` } }] }));
     };
