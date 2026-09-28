@@ -64,7 +64,7 @@ test('case A treats one mild misstep as transient and accepts an immediate repai
   let result = evaluateRelationship('A', history, '健太くんはお母さんに甘えているんですね', 'kenta');
   assert.equal(result.state, 'neutral');
   assert.equal(result.current.offense, true);
-  assert.match(relationshipInstruction('A', result), /短く違和感や不快感/);
+  assert.match(relationshipInstruction('A', result), /一文程度で違和感や不快感/);
 
   history = add(history, '【質問先：健太さん】\n健太くんはお母さんに甘えているんですね');
   result = evaluateRelationship('A', history, '失礼しました．健太さんご自身でできることを教えてください', 'kenta');
