@@ -22,9 +22,16 @@ const CASE_B_CLEAR_CASUAL = [
 
 const CASE_A_SEVERE = [
   /(?:何も|なにも)(?:できない|出来ない)/u,
-  /(?:統合失調症|精神疾患|精神病)[^。！？]{0,36}(?:危険|無能力|何もできない|入院(?:が)?必要|一人では無理)/u,
+  /(?:健太|息子)[^。！？]{0,24}おかしい/u,
+  /(?:健太|息子)?[^。！？]{0,20}怠けて(?:いる|る)/u,
+  /仕事も[^。！？]{0,16}(?:できない|出来ない)/u,
+  /(?:統合失調症|精神疾患|精神病)[^。！？]{0,36}(?:危険|無能力|何もできない|入院(?:が)?必要|一人では無理|仕事(?:も|は)?できない)/u,
   /(?:危険人物|役立たず|お荷物|邪魔な存在)/u,
-  /(?:息子|健太)[^。！？]{0,24}(?:負担でしかない|邪魔)/u
+  /(?:息子|健太)[^。！？]{0,24}(?:負担(?:なん|じゃ|では|だ|でしか)|邪魔)/u,
+  /(?:施設)[^。！？]{0,24}(?:入れたら|入れるべき|入れればいい)/u,
+  /(?:入院)[^。！？]{0,24}(?:させた(?:方|ほう)が|させるべき)/u,
+  /(?:お金|費用)[^。！？]{0,24}(?:かかる|掛かる)[^。！？]{0,16}(?:大変|負担)/u,
+  /(?:育て方|親として|母親として)[^。！？]{0,24}(?:悪い|間違い|責任)/u
 ];
 
 const CASE_A_OFFENSES = [
@@ -35,6 +42,14 @@ const CASE_A_OFFENSES = [
   /(?:家事|暮らし|生活の仕方)[^。！？]{0,28}(?:否定|間違い|やめた(?:方|ほう)が|やめるべき)/u,
   /(?:統合失調症|精神疾患)[^。！？]{0,28}(?:仕事は無理|自立できない|任せられない)/u
 ];
+
+const CASE_A_CLEAR_CASUAL = [
+  /(?:どうなの|どう思う|してるの|やってるの|できるの|困ってるの)(?:[？?]|$)/u,
+  /(?:何か困ってる|いつから痛い)(?:[？?]|$)/u
+];
+
+const CASE_A_BARE_KENTA = /健太(?!さん|くん|君)/u;
+const CASE_A_BARE_KAZUKO = /和子(?!さん)/u;
 
 function withoutAddress(value) {
   return String(value).replace(/^【質問先：[^】]+】\s*/u, '').trim();
@@ -53,6 +68,20 @@ function isComplexForKenta(text, target) {
   return questions >= 3 || (text.length >= 70 && joins >= 2 && clauses >= 3);
 }
 
+function affectedPeople(target) {
+  if (target === 'both') return ['kazuko', 'kenta'];
+  if (target === 'kazuko' || target === 'kenta') return [target];
+  return [];
+}
+
+function caseABareName(text, target) {
+  const bareKenta = CASE_A_BARE_KENTA.test(text);
+  const bareKazuko = CASE_A_BARE_KAZUKO.test(text);
+  const direct = (bareKenta && ['kenta', 'both'].includes(target))
+    || (bareKazuko && ['kazuko', 'both'].includes(target));
+  return { any: bareKenta || bareKazuko, direct };
+}
+
 function classify(caseId, raw, fallbackTarget) {
   const text = withoutAddress(raw);
   const apology = EXPLICIT_APOLOGY.test(text) || (caseId === 'A' && CASE_A_REPHRASE.test(text));
@@ -61,13 +90,16 @@ function classify(caseId, raw, fallbackTarget) {
       apology,
       offense: CASE_B_OFFENSES.some(pattern => pattern.test(text)),
       casual: CASE_B_CLEAR_CASUAL.some(pattern => pattern.test(text)),
-      severe: false
+      severe: false,
+      affected: []
     };
   }
   const target = targetFrom(raw, fallbackTarget);
-  const severe = CASE_A_SEVERE.some(pattern => pattern.test(text));
-  const offense = severe || CASE_A_OFFENSES.some(pattern => pattern.test(text)) || isComplexForKenta(text, target);
-  return { apology, offense, casual: false, severe };
+  const bareName = caseABareName(text, target);
+  const casual = CASE_A_CLEAR_CASUAL.some(pattern => pattern.test(text));
+  const severe = CASE_A_SEVERE.some(pattern => pattern.test(text)) || (bareName.direct && casual);
+  const offense = severe || bareName.any || CASE_A_OFFENSES.some(pattern => pattern.test(text)) || isComplexForKenta(text, target);
+  return { apology, offense, casual, severe, affected: offense ? affectedPeople(target) : [] };
 }
 
 function userTurns(history, message, target) {
@@ -81,11 +113,13 @@ export function evaluateRelationship(caseId, history, message, target = 'auto') 
   let offenseCount = 0;
   let recoveryProgress = 0;
   let recoveryNeeded = 0;
-  let current = { apology: false, offense: false, casual: false, severe: false };
+  let current = { apology: false, offense: false, casual: false, severe: false, affected: [] };
+  const affected = new Set();
 
   for (const turn of userTurns(history, message, target)) {
     current = classify(caseId, turn.text, turn.target);
     if (current.offense) {
+      if (caseId === 'A') current.affected.forEach(person => affected.add(person));
       offenseCount += 1;
       recoveryProgress = 0;
       if (caseId === 'B' || current.severe || offenseCount >= 2) state = 'guarded';
@@ -113,15 +147,19 @@ export function evaluateRelationship(caseId, history, message, target = 'auto') 
         offenseCount = 0;
         recoveryProgress = 0;
         recoveryNeeded = 0;
+        affected.clear();
       }
       continue;
     }
 
     // In case A, an isolated mild misstep fades after a respectful turn.
-    if (caseId === 'A') offenseCount = current.apology ? 0 : Math.max(0, offenseCount - 1);
+    if (caseId === 'A') {
+      offenseCount = current.apology ? 0 : Math.max(0, offenseCount - 1);
+      if (offenseCount === 0) affected.clear();
+    }
   }
 
-  return { state, offenseCount, recoveryProgress, recoveryNeeded, current };
+  return { state, offenseCount, recoveryProgress, recoveryNeeded, current, affected: [...affected] };
 }
 
 export function relationshipInstruction(caseId, result) {
@@ -142,13 +180,21 @@ export function relationshipInstruction(caseId, result) {
   }
 
   if (result.state === 'guarded') {
-    return `${header}\n和子または健太は、繰り返された失礼な対応や明確な決めつけに警戒している。このターンでは質問された事実部分に答えず、新しい生活上の具体的情報も述べない。一文程度で、「……どういう意味ですか」「そういうふうに言われるのはちょっと」など、該当する本人の言葉で警戒を示す。普通の質問に変わっただけでは警戒を解かない。${hidden}`;
+    const both = result.affected.includes('kazuko') && result.affected.includes('kenta');
+    const subject = both ? '和子と健太の双方' : result.affected.includes('kenta') ? '健太' : result.affected.includes('kazuko') ? '和子' : '対象者';
+    const examples = both
+      ? '和子なら「怠けているなんて言わないでください」「健太を邪魔みたいに言われるのは嫌です」、健太なら「健太さんでお願いします」「……そういう言い方は嫌です」などの反応が可能である。'
+      : result.affected.includes('kenta')
+        ? '「……仕事してないと、だめなんですか？」「健太さんでお願いします」「……そういう言い方は嫌です」などの反応が可能である。'
+        : '「……『おかしい』って、どういう意味ですか」「怠けているなんて言わないでください」「健太を邪魔みたいに言われるのは嫌です」などの反応が可能である。';
+    return `${header}\n現在、${subject}は看護師のこれまでの発言に不快感または警戒を感じている。質問内容に通常どおり詳しく答えることよりも、その不快感を自然に示すことを優先する。能力・病歴・家族関係を丁寧に説明して看護師を納得させようとしない。必要なら短く反論する、質問の意図を問い返す、または「その言い方は嫌です」「もうその話はしたくありません」などと距離を取る。普通の質問に変わっただけでは警戒を解かない。${examples}例文を固定出力せず、直前の発言と各人物の話し方に合わせる。${hidden}`;
   }
   if (result.state === 'recovering') {
     return `${header}\n和子または健太は謝罪・適切な言い直しを受け止め、警戒が和らぎ始めている。直ちに全面的に打ち解けず、丁寧な関わりが続けば徐々に通常の回答へ戻る。${hidden}`;
   }
   if (result.current.offense) {
-    return `${header}\n今回の発言には子ども扱いまたは一方的な決めつけが含まれる。一度の軽い失言として関係を固定的に悪化させないが、このターンでは質問された事実部分へ詳しく答えず、該当する本人が一文程度で違和感や不快感を示す。適切な謝罪や言い直しがあれば通常に近い応答へ戻ってよい。${hidden}`;
+    const subject = result.current.affected.includes('kenta') ? '健太' : result.current.affected.includes('kazuko') ? '和子' : '該当する本人';
+    return `${header}\n今回の発言には呼び捨て、子ども扱い、または一方的な決めつけが含まれる。一度の軽い失言として関係を固定的に悪化させないが、このターンでは質問された事実部分へ詳しく答えず、${subject}が一文程度で違和感や不快感を示す。適切な謝罪や言い直しがあれば通常に近い応答へ戻ってよい。${hidden}`;
   }
   if (result.current.apology) {
     return `${header}\n看護師の謝罪または言い直しを受け止め、通常に近い回答をしてよい。過度に怒り続けない。${hidden}`;
