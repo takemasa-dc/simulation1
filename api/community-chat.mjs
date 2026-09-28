@@ -26,6 +26,37 @@ function retrySeconds(value) {
   return Math.min(3600, Math.max(1, Math.ceil(Number.isFinite(seconds) ? seconds : 30)));
 }
 
+function isValidNamedReply(reply, allowedSpeakers) {
+  let index = 0;
+  let utterances = 0;
+  const skipWhitespace = () => {
+    while (index < reply.length && /\s/u.test(reply[index])) index += 1;
+  };
+
+  skipWhitespace();
+  while (index < reply.length) {
+    const speaker = allowedSpeakers.find(name => reply.startsWith(`${name}「`, index));
+    if (!speaker) return false;
+    index += speaker.length;
+
+    let depth = 0;
+    while (index < reply.length) {
+      const character = reply[index];
+      index += 1;
+      if (character === '「') depth += 1;
+      if (character === '」') {
+        depth -= 1;
+        if (depth === 0) break;
+        if (depth < 0) return false;
+      }
+    }
+    if (depth !== 0) return false;
+    utterances += 1;
+    skipWhitespace();
+  }
+  return utterances > 0;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -100,9 +131,8 @@ export default async function handler(req, res) {
     if (typeof reply !== 'string' || !reply.trim() || reply.length > 6000 || choice.finish_reason === 'length') {
       return respond(res, 502, { error: '回答を正常に受け取れませんでした。質問を短くして再度送信してください。' });
     }
-    const allowed = caseId === 'B' ? '正夫' : target === 'kazuko' ? '和子' : target === 'kenta' ? '健太' : '和子|健太';
-    const utterances = new RegExp(`^(?:(?:${allowed})「[^「」]*」\\s*)+$`, 'u');
-    if (!utterances.test(reply.trim())) {
+    const allowedSpeakers = caseId === 'B' ? ['正夫'] : target === 'kazuko' ? ['和子'] : target === 'kenta' ? ['健太'] : ['和子', '健太'];
+    if (!isValidNamedReply(reply.trim(), allowedSpeakers)) {
       return respond(res, 502, { error: '対象者の回答を正常に受け取れませんでした。質問を言い換えて送信してください。' });
     }
     return respond(res, 200, { reply, userMessage });
