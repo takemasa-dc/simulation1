@@ -13,7 +13,12 @@
   const manualCopy = document.getElementById('manualCopy');
   const logText = document.getElementById('logText');
   const selectLog = document.getElementById('selectLog');
-  // No localStorage, shared server history, or student identifiers.
+  const interviewProgress = document.getElementById('interviewProgress');
+  const usageKey = `community_case${caseId}_totalUsage`;
+  const MEETING_TARGET = 25;
+  const MEETING_LIMIT = 28;
+  const TOTAL_USAGE_LIMIT = 40;
+  // Conversation history remains in memory; localStorage contains only the per-case cumulative request count.
   let history = [];
   // Selection metadata only; the conversation itself remains in history.
   let questionTargets = [];
@@ -22,7 +27,55 @@
   let generation = 0;
   let blockedUntil = 0;
   let cooldownTimer;
-  const MAX_TURNS = 60;
+  let meetingUsage = 0;
+  let usageStorageAvailable = true;
+
+  function readTotalUsage() {
+    try {
+      const value = Number.parseInt(localStorage.getItem(usageKey) || '0', 10);
+      return Number.isFinite(value) ? Math.min(TOTAL_USAGE_LIMIT, Math.max(0, value)) : 0;
+    } catch {
+      usageStorageAvailable = false;
+      return TOTAL_USAGE_LIMIT;
+    }
+  }
+  let totalUsage = readTotalUsage();
+
+  function consumeUsage() {
+    const current = readTotalUsage();
+    totalUsage = current;
+    if (!usageStorageAvailable || current >= TOTAL_USAGE_LIMIT) return false;
+    try {
+      totalUsage = current + 1;
+      localStorage.setItem(usageKey, String(totalUsage));
+      return true;
+    } catch {
+      usageStorageAvailable = false;
+      totalUsage = TOTAL_USAGE_LIMIT;
+      return false;
+    }
+  }
+
+  function usageLimitMessage() {
+    if (totalUsage >= TOTAL_USAGE_LIMIT) return 'この演習で利用できる上限に達しました．これまでの会話ログを提出してください．';
+    if (meetingUsage >= MEETING_LIMIT) return '面談は終了しました．会話ログをコピーして提出してください．';
+    return '';
+  }
+
+  function updateInterviewProgress() {
+    const percent = Math.max(0, Math.round((MEETING_TARGET - meetingUsage) / MEETING_TARGET * 100));
+    interviewProgress.value = percent;
+    interviewProgress.textContent = `${percent}%`;
+    interviewProgress.className = percent <= 20 ? 'low' : '';
+  }
+
+  function announceAfterReply() {
+    const limit = usageLimitMessage();
+    if (limit) return announce(limit);
+    if (meetingUsage === MEETING_TARGET) return announce('予定していた面談時間になりました．必要な確認があれば，あと少しだけ質問できます．');
+    if (meetingUsage > MEETING_TARGET) return announce('面談終了の時間が近づいています．');
+    announce('');
+  }
 
   function conversationText() {
     const titles = {
@@ -102,9 +155,10 @@
   }
   function updateControls() {
     const waiting = Date.now() < blockedUntil;
-    send.disabled = !!pending || waiting || history.length >= MAX_TURNS * 2;
-    input.disabled = !!pending;
-    if (target) target.disabled = !!pending;
+    const ended = meetingUsage >= MEETING_LIMIT || totalUsage >= TOTAL_USAGE_LIMIT;
+    send.disabled = !!pending || waiting || ended;
+    input.disabled = !!pending || ended;
+    if (target) target.disabled = !!pending || ended;
     send.textContent = pending ? '回答を待っています…' : '送信';
   }
   function cooldown(seconds) {
@@ -113,7 +167,7 @@
     const tick = () => {
       const left = Math.ceil((blockedUntil - Date.now()) / 1000);
       if (left > 0) announce(`利用が集中しています。あと${left}秒待ってから送信してください。質問は入力欄に残っています。`, true);
-      else { clearInterval(cooldownTimer); announce('送信できます。'); }
+      else { clearInterval(cooldownTimer); announce(usageLimitMessage() || '送信できます。'); }
       updateControls();
     };
     tick();
@@ -122,7 +176,13 @@
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (pending || Date.now() < blockedUntil || history.length >= MAX_TURNS * 2) return;
+    totalUsage = readTotalUsage();
+    if (pending || Date.now() < blockedUntil || meetingUsage >= MEETING_LIMIT || totalUsage >= TOTAL_USAGE_LIMIT) {
+      const limit = usageLimitMessage();
+      if (limit) announce(limit);
+      updateControls();
+      return;
+    }
     const text = input.value.trim();
     if (!text) { announce('質問を入力してください。'); input.focus(); return; }
     if (text.length > 2000) { announce('質問は2,000文字以内で入力してください。', true); return; }
@@ -131,6 +191,13 @@
     const currentGeneration = generation;
     const controller = new AbortController();
     let latestReply;
+    if (!consumeUsage()) {
+      announce(usageLimitMessage());
+      updateControls();
+      return;
+    }
+    meetingUsage += 1;
+    updateInterviewProgress();
     pending = controller;
     updateControls();
     announce('回答を待っています…');
@@ -158,12 +225,13 @@
       render(names[selected] ? `${names[selected]}\n${text}` : text, 'user');
       latestReply = render(data.reply, 'gpt');
       input.value = '';
-      announce(history.length >= MAX_TURNS * 2 ? '60回の対話が終了しました。履歴を確認し、続ける場合は最初からやり直してください。' : '');
+      announceAfterReply();
     } catch (error) {
       if (currentGeneration !== generation) return;
-      announce(error.name === 'AbortError'
+      const errorMessage = error.name === 'AbortError'
         ? '応答に時間がかかっています。質問は残っています。少し待って再度送信してください。'
-        : (error instanceof TypeError ? '接続できませんでした。通信環境を確認して再度送信してください。' : error.message), true);
+        : (error instanceof TypeError ? '接続できませんでした。通信環境を確認して再度送信してください。' : error.message);
+      announce(`${errorMessage}${usageLimitMessage() ? ` ${usageLimitMessage()}` : ''}`, true);
     } finally {
       clearTimeout(timeout);
       if (currentGeneration === generation) {
@@ -190,15 +258,26 @@
     pending = null;
     history = [];
     questionTargets = [];
+    meetingUsage = 0;
+    totalUsage = readTotalUsage();
     copying = false;
+    updateInterviewProgress();
     refreshCopyLog();
     chat.replaceChildren();
     input.value = '';
     if (target) target.value = caseId === 'A' ? 'kazuko' : 'auto';
     // Keep a rate-limit cooldown even when the conversation is reset.
-    if (Date.now() >= blockedUntil) announce('新しい面談です。質問を入力してください。');
+    if (Date.now() >= blockedUntil) announce(usageLimitMessage() || '新しい面談です。質問を入力してください。');
     updateControls(); input.focus();
   });
+  window.addEventListener?.('storage', event => {
+    if (event.key !== usageKey) return;
+    totalUsage = readTotalUsage();
+    if (totalUsage >= TOTAL_USAGE_LIMIT) announce(usageLimitMessage());
+    updateControls();
+  });
+  updateInterviewProgress();
   updateControls();
   refreshCopyLog();
+  if (totalUsage >= TOTAL_USAGE_LIMIT) announce(usageLimitMessage());
 })();

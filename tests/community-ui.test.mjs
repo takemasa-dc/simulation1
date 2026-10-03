@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 const source = readFileSync(new URL('../community.js', import.meta.url), 'utf8');
 
-function screen(caseId = 'A', clipboard, compact = false) {
+function screen(caseId = 'A', clipboard, compact = false, storage = new Map()) {
   const elements = {};
   const make = () => ({
     value: '', textContent: '', className: '', disabled: false, hidden: true, children: [], events: {},
@@ -14,7 +14,7 @@ function screen(caseId = 'A', clipboard, compact = false) {
     select() { this.selected = true; }, setSelectionRange(start, end) { this.selection = [start, end]; },
     requestSubmit() { return this.events.submit({ preventDefault() {} }); }
   });
-  for (const id of ['chat','chatForm','userInput','target','send','reset','status','copyLog','copyStatus','manualCopy','logText','selectLog']) elements[id] = make();
+  for (const id of ['chat','chatForm','userInput','target','send','reset','status','copyLog','copyStatus','manualCopy','logText','selectLog','interviewProgress']) elements[id] = make();
   elements.target.value = caseId === 'A' ? 'kazuko' : 'auto';
   const requests = [];
   const intervals = new Map();
@@ -23,6 +23,10 @@ function screen(caseId = 'A', clipboard, compact = false) {
   vm.runInNewContext(source, {
     document: { body: { dataset: {case:caseId} }, getElementById: id => elements[id], createElement: make },
     window: { confirm: () => confirms, matchMedia: () => ({ matches: compact }) }, AbortController, TypeError,
+    localStorage: {
+      getItem: key => storage.has(key) ? storage.get(key) : null,
+      setItem: (key, value) => storage.set(key, String(value))
+    },
     navigator: { clipboard: clipboard === null ? undefined : clipboard || { writeText: async text => { copied.push(text); } } },
     Date: { now: () => time },
     setTimeout: () => ++timer, clearTimeout() {},
@@ -30,7 +34,7 @@ function screen(caseId = 'A', clipboard, compact = false) {
     fetch: (url, options) => new Promise((resolve,reject) => requests.push({url,options,resolve,reject}))
   });
   return {
-    elements, requests, copied,
+    elements, requests, copied, storage,
     copy: () => elements.copyLog.events.click(),
     submit: () => elements.chatForm.requestSubmit(),
     reset: () => elements.reset.events.click(),
@@ -46,14 +50,17 @@ test('double submit sends once; all successful turns are retained; errors are re
   e.userInput.value='質問';
   const first=s.submit(); await s.submit();
   assert.equal(s.requests.length,1); assert.equal(e.send.disabled,true); assert.equal(e.userInput.disabled,true);
+  assert.equal(s.storage.get('community_caseA_totalUsage'),'1');
   s.reply(0); await first;
   assert.equal(e.chat.children.length,2); assert.equal(e.userInput.value,'');
   e.userInput.value='次の質問';
   const second=s.submit();
+  assert.equal(s.storage.get('community_caseA_totalUsage'),'2');
   assert.equal(JSON.parse(s.requests[1].options.body).history.length,2);
   s.reply(1,502,{error:'通信エラー'}); await second;
   assert.equal(e.userInput.value,'次の質問'); assert.equal(e.chat.children.length,2);
   const retry=s.submit();
+  assert.equal(s.storage.get('community_caseA_totalUsage'),'3');
   assert.equal(JSON.parse(s.requests[2].options.body).history.length,2);
   s.reply(2); await retry;
   assert.equal(e.chat.children.length,4);
@@ -171,4 +178,86 @@ test('A defaults and resets to Kazuko; mobile success reveals the latest reply',
   assert.equal(e.chat.children.at(-1).scrolledIntoView.block,'center');
   assert.equal(e.userInput.focused,undefined);
   s.reset();assert.equal(e.target.value,'kazuko');
+});
+
+test('meeting gauge reaches zero at 25, allows 26-27, and ends after the 28th reply while copy remains available', async () => {
+  const s=screen('B'),e=s.elements;
+  assert.equal(e.interviewProgress.value,100);
+  for (let i=1;i<=24;i++) await complete(s,`質問${i}`,`正夫「回答${i}」`);
+  assert.equal(e.interviewProgress.value,4);
+  assert.equal(e.send.disabled,false);
+
+  await complete(s,'質問25','正夫「回答25」');
+  assert.equal(e.interviewProgress.value,0);
+  assert.match(e.status.textContent,/予定していた面談時間/);
+  assert.equal(e.send.disabled,false);
+
+  await complete(s,'質問26','正夫「回答26」');
+  assert.match(e.status.textContent,/面談終了の時間が近づいています/);
+  assert.equal(e.send.disabled,false);
+  await complete(s,'質問27','正夫「回答27」');
+  assert.equal(e.send.disabled,false);
+
+  await complete(s,'質問28','正夫「回答28」');
+  assert.match(e.status.textContent,/面談は終了しました/);
+  assert.equal(e.send.disabled,true);
+  assert.equal(e.userInput.disabled,true);
+  assert.equal(e.copyLog.disabled,false);
+  e.userInput.value='質問29';await s.submit();
+  assert.equal(s.requests.length,28);
+  await s.copy();assert.match(s.copied[0],/回答28/);
+});
+
+test('reload and reset restart the meeting gauge but retain per-case cumulative usage', async () => {
+  const storage=new Map();
+  const first=screen('A',undefined,false,storage);
+  await complete(first,'質問','和子「回答」');
+  assert.equal(storage.get('community_caseA_totalUsage'),'1');
+  assert.equal(first.elements.interviewProgress.value,96);
+
+  const reloaded=screen('A',undefined,false,storage);
+  assert.equal(reloaded.elements.interviewProgress.value,100);
+  assert.equal(reloaded.elements.send.disabled,false);
+  assert.equal(storage.get('community_caseA_totalUsage'),'1');
+
+  first.reset();
+  assert.equal(first.elements.interviewProgress.value,100);
+  assert.equal(storage.get('community_caseA_totalUsage'),'1');
+
+  const otherCase=screen('B',undefined,false,storage);
+  assert.equal(otherCase.elements.send.disabled,false);
+  await complete(otherCase,'質問','正夫「回答」');
+  assert.equal(storage.get('community_caseA_totalUsage'),'1');
+  assert.equal(storage.get('community_caseB_totalUsage'),'1');
+});
+
+test('the 40th cumulative request is allowed, then later requests stop across reloads without disabling copy', async () => {
+  const storage=new Map([['community_caseA_totalUsage','39']]);
+  const s=screen('A',undefined,false,storage),e=s.elements;
+  await complete(s,'最後の質問','和子「最後の回答」');
+  assert.equal(storage.get('community_caseA_totalUsage'),'40');
+  assert.match(e.status.textContent,/この演習で利用できる上限に達しました/);
+  assert.equal(e.send.disabled,true);
+  assert.equal(e.userInput.disabled,true);
+  assert.equal(e.copyLog.disabled,false);
+  e.userInput.value='上限後';await s.submit();assert.equal(s.requests.length,1);
+
+  const reloaded=screen('A',undefined,false,storage);
+  assert.equal(reloaded.elements.send.disabled,true);
+  assert.equal(reloaded.elements.userInput.disabled,true);
+  assert.match(reloaded.elements.status.textContent,/この演習で利用できる上限に達しました/);
+  assert.equal(reloaded.requests.length,0);
+
+  const caseB=screen('B',undefined,false,storage);
+  assert.equal(caseB.elements.send.disabled,false);
+  assert.equal(caseB.elements.interviewProgress.value,100);
+});
+
+test('both case pages show the interview-time gauge and explain that it is not elapsed time', () => {
+  for (const file of ['../caseA.html','../caseB.html']) {
+    const html=readFileSync(new URL(file,import.meta.url),'utf8');
+    assert.match(html,/id="interviewProgress"/);
+    assert.match(html,/面談時間の目安は，質問回数に応じて減っていきます．実際の経過時間を計測しているものではありません．/);
+    assert.doesNotMatch(html,/\d+\s*\/\s*25/u);
+  }
 });

@@ -60,6 +60,11 @@
 <section aria-labelledby="interviewTitle">
 <h2 id="interviewTitle">面談</h2>
 <p class="hint">架空の対象者との対話です。実在する方の個人情報は入力しないでください。会話はこの画面の中だけで保持され、再読み込みや画面を閉じると消えます。</p>
+<div class="interview-meter" aria-labelledby="interviewTimeLabel">
+<div id="interviewTimeLabel" class="interview-meter-label">面談時間</div>
+<progress id="interviewProgress" max="100" value="100" aria-describedby="interviewTimeHint">100%</progress>
+<p id="interviewTimeHint" class="hint">面談時間の目安は，質問回数に応じて減っていきます．実際の経過時間を計測しているものではありません．</p>
+</div>
 <div id="chat" class="chat-box" role="log" aria-label="面談の会話" aria-live="polite" aria-relevant="additions" tabindex="0"></div>
 <form id="chatForm">
 
