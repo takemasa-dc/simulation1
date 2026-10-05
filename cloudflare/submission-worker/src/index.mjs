@@ -266,11 +266,20 @@ async function exportCsv(request, env) {
 }
 
 function adminPage() {
-  return new Response(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>課題ファイル提出一覧</title><style>body{font-family:system-ui,sans-serif;margin:0;background:#f5f7f5;color:#26332d}main{max-width:1100px;margin:auto;padding:1rem}form,.panel{background:#fff;border:1px solid #ccd6cf;border-radius:8px;padding:1rem;margin-bottom:1rem}label{display:block;font-weight:600}input,button{font:inherit;font-size:16px;padding:.6rem;border-radius:6px}input{border:1px solid #9aa99e;width:min(100%,32rem)}button{border:1px solid #2e713d;background:#327b42;color:#fff;cursor:pointer}button:disabled{opacity:.55}table{width:100%;border-collapse:collapse;background:#fff}th,td{text-align:left;padding:.6rem;border-bottom:1px solid #dde3de;vertical-align:top}#status{min-height:1.5em}.error{color:#a02424}@media(max-width:700px){table,thead,tbody,tr,th,td{display:block}thead{position:absolute;left:-9999px}tr{border:1px solid #ccd6cf;margin-bottom:.75rem}td::before{content:attr(data-label);font-weight:600;display:block}}</style></head><body><main><h1>課題ファイル提出一覧</h1><form id="auth"><label for="token">管理者トークン</label><input id="token" type="password" autocomplete="off" required><button type="submit">一覧を表示</button><p>トークンはこのページのメモリ内だけで使用し，保存しません．</p></form><p id="status" role="status"></p><div id="panel" class="panel" hidden><button id="refresh" type="button">最新の一覧に更新</button><table><thead><tr><th>学籍番号</th><th>提出日時</th><th>ファイル名</th><th>サイズ</th><th></th></tr></thead><tbody id="rows"></tbody></table></div></main><script>(()=>{'use strict';let adminToken='';const auth=document.getElementById('auth'),token=document.getElementById('token'),status=document.getElementById('status'),panel=document.getElementById('panel'),rows=document.getElementById('rows'),refresh=document.getElementById('refresh');const date=value=>{const d=new Date(value);return Number.isNaN(d.getTime())?value:d.toLocaleString('ja-JP')};const size=value=>value>=1048576?(value/1048576).toFixed(1)+' MB':Math.ceil(value/1024)+' KB';function cell(row,label,text){const td=document.createElement('td');td.dataset.label=label;td.textContent=text;row.append(td)}async function load(){status.textContent='読み込んでいます…';status.className='';const response=await fetch('/admin/api/file-submissions',{headers:{Authorization:'Bearer '+adminToken}});if(!response.ok)throw new Error('AUTH');const data=await response.json();rows.replaceChildren();for(const item of data.submissions){const row=document.createElement('tr');cell(row,'学籍番号',item.student_id);cell(row,'提出日時',date(item.submitted_at));cell(row,'ファイル名',item.original_filename);cell(row,'サイズ',size(item.file_size));const action=document.createElement('td');action.dataset.label='操作';const button=document.createElement('button');button.type='button';button.textContent='ダウンロード';button.addEventListener('click',()=>download(item,button));action.append(button);row.append(action);rows.append(row)}panel.hidden=false;status.textContent=data.submissions.length+'件の提出があります．'}async function download(item,button){button.disabled=true;status.textContent='ダウンロードを準備しています…';try{const response=await fetch('/admin/api/file-submissions/'+item.id+'/download',{headers:{Authorization:'Bearer '+adminToken}});if(!response.ok)throw new Error('DOWNLOAD');const blob=await response.blob();const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=item.original_filename;document.body.append(link);link.click();link.remove();URL.revokeObjectURL(url);status.textContent=item.original_filename+'をダウンロードしました．'}catch{status.textContent='ダウンロードできませんでした．';status.className='error'}finally{button.disabled=false}}auth.addEventListener('submit',async event=>{event.preventDefault();adminToken=token.value;token.value='';try{await load()}catch{adminToken='';panel.hidden=true;status.textContent='認証できませんでした．';status.className='error'}});refresh.addEventListener('click',()=>load().catch(()=>{status.textContent='一覧を取得できませんでした．';status.className='error'}));})();</script></body></html>`, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" } });
+  return new Response(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>課題ファイル提出一覧</title><style>body{font-family:system-ui,sans-serif;margin:0;background:#f5f7f5;color:#26332d}main{max-width:1100px;margin:auto;padding:1rem}.panel{background:#fff;border:1px solid #ccd6cf;border-radius:8px;padding:1rem;margin-bottom:1rem}button{font:inherit;font-size:16px;padding:.6rem;border:1px solid #2e713d;border-radius:6px;background:#327b42;color:#fff;cursor:pointer}button:disabled{opacity:.55}table{width:100%;border-collapse:collapse;background:#fff}th,td{text-align:left;padding:.6rem;border-bottom:1px solid #dde3de;vertical-align:top}#status{min-height:1.5em}.error{color:#a02424}@media(max-width:700px){table,thead,tbody,tr,th,td{display:block}thead{position:absolute;left:-9999px}tr{border:1px solid #ccd6cf;margin-bottom:.75rem}td::before{content:attr(data-label);font-weight:600;display:block}}</style></head><body><main><h1>課題ファイル提出一覧</h1><p id="status" role="status">読み込んでいます…</p><div id="panel" class="panel" hidden><button id="refresh" type="button">最新の一覧に更新</button><table><thead><tr><th>学籍番号</th><th>提出日時</th><th>ファイル名</th><th>サイズ</th><th></th></tr></thead><tbody id="rows"></tbody></table></div></main><script>(()=>{'use strict';const status=document.getElementById('status'),panel=document.getElementById('panel'),rows=document.getElementById('rows'),refresh=document.getElementById('refresh');const date=value=>{const d=new Date(value);return Number.isNaN(d.getTime())?value:d.toLocaleString('ja-JP')};const size=value=>value>=1048576?(value/1048576).toFixed(1)+' MB':Math.ceil(value/1024)+' KB';function cell(row,label,text){const td=document.createElement('td');td.dataset.label=label;td.textContent=text;row.append(td)}async function load(){status.textContent='読み込んでいます…';status.className='';const response=await fetch('/admin/api/file-submissions');if(!response.ok)throw new Error('ACCESS');const data=await response.json();rows.replaceChildren();for(const item of data.submissions){const row=document.createElement('tr');cell(row,'学籍番号',item.student_id);cell(row,'提出日時',date(item.submitted_at));cell(row,'ファイル名',item.original_filename);cell(row,'サイズ',size(item.file_size));const action=document.createElement('td');action.dataset.label='操作';const button=document.createElement('button');button.type='button';button.textContent='ダウンロード';button.addEventListener('click',()=>download(item,button));action.append(button);row.append(action);rows.append(row)}panel.hidden=false;status.textContent=data.submissions.length+'件の提出があります．'}async function download(item,button){button.disabled=true;status.textContent='ダウンロードを準備しています…';try{const response=await fetch('/admin/api/file-submissions/'+item.id+'/download');if(!response.ok)throw new Error('DOWNLOAD');const blob=await response.blob();const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=item.original_filename;document.body.append(link);link.click();link.remove();URL.revokeObjectURL(url);status.textContent=item.original_filename+'をダウンロードしました．'}catch{status.textContent='ダウンロードできませんでした．Cloudflare Accessの認証状態を確認してください．';status.className='error'}finally{button.disabled=false}}function showLoadError(){panel.hidden=true;status.textContent='一覧を取得できませんでした．Cloudflare Accessの認証状態を確認してください．';status.className='error'}refresh.addEventListener('click',()=>load().catch(showLoadError));load().catch(showLoadError);})();</script></body></html>`, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" } });
 }
 
-async function listFileSubmissions(request, env) {
-  if (!authorized(request, env.ADMIN_EXPORT_TOKEN)) return json({ error: 'Unauthorized' }, 401);
+async function accessIdentity(ctx) {
+  if (!ctx?.access) return null;
+  try {
+    const identity = await ctx.access.getIdentity();
+    return typeof identity?.email === 'string' && identity.email ? identity : null;
+  } catch {
+    return null;
+  }
+}
+
+async function listFileSubmissions(env) {
   const { results = [] } = await env.SUBMISSIONS_DB.prepare('SELECT id, student_id, submitted_at, original_filename, content_type, file_size FROM file_submissions ORDER BY submitted_at DESC, id DESC').all();
   return json({ ok: true, submissions: results });
 }
@@ -280,8 +289,7 @@ function downloadFilename(filename) {
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
-async function downloadFile(request, env, id) {
-  if (!authorized(request, env.ADMIN_EXPORT_TOKEN)) return json({ error: 'Unauthorized' }, 401);
+async function downloadFile(env, id) {
   const row = await env.SUBMISSIONS_DB.prepare('SELECT original_filename, content_type, r2_object_key FROM file_submissions WHERE id = ?1').bind(id).first();
   if (!row) return json({ error: 'Not found' }, 404);
   const object = await env.SUBMISSION_FILES.get(row.r2_object_key);
@@ -290,7 +298,7 @@ async function downloadFile(request, env, id) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const { pathname } = new URL(request.url);
     try {
       if (pathname === '/submit-log' && request.method === 'POST') return await saveSubmission(request, env);
@@ -299,10 +307,13 @@ export default {
       if (pathname === '/file-submissions/chunk' && request.method === 'POST') return await saveFileChunk(request, env);
       if (pathname === '/file-submissions/complete' && request.method === 'POST') return await completeFileUpload(request, env);
       if (pathname === '/file-submissions/abort' && request.method === 'POST') return await abortFileUpload(request, env);
+      if (pathname === '/admin' || pathname.startsWith('/admin/')) {
+        if (!await accessIdentity(ctx)) return json({ error: 'Cloudflare Access required' }, 403);
+      }
       if (pathname === '/admin' && request.method === 'GET') return adminPage();
-      if (pathname === '/admin/api/file-submissions' && request.method === 'GET') return await listFileSubmissions(request, env);
+      if (pathname === '/admin/api/file-submissions' && request.method === 'GET') return await listFileSubmissions(env);
       const downloadMatch = pathname.match(/^\/admin\/api\/file-submissions\/(\d+)\/download$/u);
-      if (downloadMatch && request.method === 'GET') return await downloadFile(request, env, Number(downloadMatch[1]));
+      if (downloadMatch && request.method === 'GET') return await downloadFile(env, Number(downloadMatch[1]));
       return json({ error: 'Not found' }, 404);
     } catch {
       return json({ error: 'Internal error' }, 500);

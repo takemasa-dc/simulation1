@@ -237,29 +237,39 @@ test('Worker rejects invalid uploads, rolls R2 back after D1 failure, and leaves
   assert.equal(env.SUBMISSION_FILES.objects.size, 0);
 });
 
-test('admin list and individual download require the token, sort newest first, and preserve filenames', async () => {
+test('admin list and individual download require Cloudflare Access, sort newest first, and preserve filenames', async () => {
   const env = workerEnv();
+  const teacherContext = { access: { async getIdentity() { return { email: 'teacher@example.ac.jp' }; } } };
   await submitFile(env, { studentId: 'A001', filename: '資料.pdf', contentType: 'application/pdf', bytes: new Uint8Array([1, 2]) });
   await submitFile(env, { studentId: 'A002', filename: '発表資料.pptx', contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', bytes: new Uint8Array([3, 4, 5]) });
 
   let response = await submissionWorker.fetch(new Request('https://worker.test/admin/api/file-submissions'), env);
-  assert.equal(response.status, 401);
+  assert.equal(response.status, 403);
   response = await submissionWorker.fetch(new Request('https://worker.test/admin/api/file-submissions', { headers: { Authorization: 'Bearer admin-secret' } }), env);
+  assert.equal(response.status, 403);
+  response = await submissionWorker.fetch(new Request('https://worker.test/admin/api/file-submissions'), env, teacherContext);
   assert.equal(response.status, 200);
   const list = await response.json();
   assert.deepEqual(list.submissions.map(item => item.student_id), ['A002', 'A001']);
   assert.equal(JSON.stringify(list).includes('r2_object_key'), false);
 
   response = await submissionWorker.fetch(new Request('https://worker.test/admin/api/file-submissions/1/download'), env);
-  assert.equal(response.status, 401);
-  response = await submissionWorker.fetch(new Request('https://worker.test/admin/api/file-submissions/1/download', { headers: { Authorization: 'Bearer admin-secret' } }), env);
+  assert.equal(response.status, 403);
+  response = await submissionWorker.fetch(new Request('https://worker.test/admin/api/file-submissions/1/download'), env, teacherContext);
   assert.equal(response.status, 200);
   assert.match(response.headers.get('content-disposition'), /filename\*=UTF-8''%E8%B3%87%E6%96%99\.pdf/u);
   assert.deepEqual([...new Uint8Array(await response.arrayBuffer())], [1, 2]);
 
   response = await submissionWorker.fetch(new Request('https://worker.test/admin'), env);
+  assert.equal(response.status, 403);
+  response = await submissionWorker.fetch(new Request('https://worker.test/admin'), env, teacherContext);
   const html = await response.text();
   assert.equal(response.status, 200);
-  assert.match(html, /type="password"/u);
-  assert.doesNotMatch(html, /localStorage|sessionStorage/u);
+  assert.doesNotMatch(html, /type="password"|ADMIN_EXPORT_TOKEN|adminToken|Authorization/u);
+  assert.match(html, /load\(\)\.catch/u);
+
+  response = await submissionWorker.fetch(new Request('https://worker.test/export.csv'), env, teacherContext);
+  assert.equal(response.status, 401);
+  response = await submissionWorker.fetch(new Request('https://worker.test/export.csv', { headers: { Authorization: 'Bearer admin-secret' } }), env);
+  assert.equal(response.status, 200);
 });

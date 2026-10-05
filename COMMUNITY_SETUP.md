@@ -19,7 +19,7 @@ Vercelの対象プロジェクト → Settings → Environment Variables に、�
 | `COMMUNITY_CASE_A_PROMPT` | `COMMUNITY_CASE_A_VALUE.txt` の全文（`gzip:`で始まる1行） |
 | `COMMUNITY_CASE_B_PROMPT` | `COMMUNITY_CASE_B_VALUE.txt` の全文（`gzip:`で始まる1行） |
 | `COMMUNITY_MODEL`（任意） | 未設定なら `gpt-4o-mini` |
-| `SUBMISSION_WORKER_URL` | 提出専用WorkerのURL（例：`https://community-log-submissions.<subdomain>.workers.dev`） |
+| `SUBMISSION_WORKER_URL` | `https://community-log-submissions.takemasa-simulation.workers.dev` |
 | `SUBMISSION_WORKER_SECRET` | 提出専用Workerの `SUBMISSION_SHARED_SECRET` と同じランダム値 |
 
 非公開設定の2つの値は合計約34KBです。Node.js Function内でのみ展開します。平文の人物設定も受け付けますが、長い設定書は環境変数の容量上限を超えるため圧縮版を使ってください。環境変数が欠落・破損している場合、該当事例は準備中のエラーを返し、APIを呼びません。
@@ -144,16 +144,16 @@ Vercel Functionsにはリクエスト本文の上限があるため、ブラウ�
 
 ### 教員用管理画面と個別ダウンロード
 
-管理画面のURLは `https://community-log-submissions.<subdomain>.workers.dev/admin` です。一覧は提出日時の新しい順に、学籍番号、提出日時、元のファイル名、ファイルサイズ、個別ダウンロードボタンを表示します。ダウンロード時だけ認証済みWorkerが非公開R2から読み出し、`Content-Disposition` に元のファイル名を設定します。R2の公開URLは発行しません。
+管理画面のURLは `https://community-log-submissions.takemasa-simulation.workers.dev/admin` です。一覧は提出日時の新しい順に、学籍番号、提出日時、元のファイル名、ファイルサイズ、個別ダウンロードボタンを表示します。ダウンロード時だけ認証済みWorkerが非公開R2から読み出し、`Content-Disposition` に元のファイル名を設定します。R2の公開URLは発行しません。
 
 Cloudflare Accessを `/admin*` に適用し、教員のメールアドレスだけをAllowにしてください。Worker全体を保護すると学生からの提出も遮断されるため、対象hostnameとpathを管理画面に限定します。
 
-1. Cloudflare Zero Trustの **Access controls → Applications** でSelf-hosted applicationを追加します。
-2. hostnameを提出Workerの `workers.dev` hostname、pathを `/admin*` にします。
+1. `takemasa-simulation`アカウントのCloudflare Zero Trustで、**Access controls → Applications** からSelf-hosted applicationを追加します。
+2. application domainを `community-log-submissions.takemasa-simulation.workers.dev/admin*` にします。
 3. Allow policyに教員のメールアドレス（または大学管理のメールグループ）だけを登録します。
-4. 管理画面を開き、Access認証後に既存の `ADMIN_EXPORT_TOKEN` を入力します。トークンはURL、`localStorage`、`sessionStorage`へ保存されず、そのページのJavaScriptメモリだけで保持されます。
+4. 管理画面を開き、Cloudflare Accessで教員メールの認証を行います。認証後はトークン入力なしで一覧が自動表示され、個別ダウンロードもそのまま利用できます。
 
-Cloudflare Accessをまだ設定していない状態でも、一覧APIとダウンロードAPIは `ADMIN_EXPORT_TOKEN` がなければ401を返します。ただし管理画面自体を一般利用者に表示させない要件を満たすため、本番利用前に上記Access設定を完了してください。
+Workerは `/admin` と `/admin/api/*` の両方でCloudflareが提供する `ctx.access` を確認し、Access認証済みで有効なメールアドレスを取得できないリクエストを403で拒否します。Cloudflare Accessを設定していない状態では管理画面を利用できません。本番利用前に上記Access設定を完了してください。`ADMIN_EXPORT_TOKEN` は管理画面では使用せず、既存の `/export.csv` のコマンドライン取得だけに使用します。
 
 ### 教員用CSVの取得
 
@@ -165,7 +165,7 @@ PowerShellでは、トークンを画面入力して次のように保存でき�
 $secureToken = Read-Host "ADMIN_EXPORT_TOKEN" -AsSecureString
 $adminToken = [System.Net.NetworkCredential]::new('', $secureToken).Password
 $headers = @{ Authorization = "Bearer $adminToken" }
-Invoke-WebRequest -Uri "<提出WorkerのURL>/export.csv" -Headers $headers -OutFile "submissions.csv"
+Invoke-WebRequest -Uri "https://community-log-submissions.takemasa-simulation.workers.dev/export.csv" -Headers $headers -OutFile "submissions.csv"
 ```
 
 取得後は `Remove-Variable adminToken, secureToken` でセッション内の変数を削除してください。CSVには学籍番号と会話内容が含まれるため、大学の規程に沿って保管します。
