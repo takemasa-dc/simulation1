@@ -181,6 +181,10 @@ test('Vercel file API validates metadata and forwards only to the submission Wor
   assert.equal(response.statusCode, 201);
   response = await callApi('init', { student_id: '20260001', original_filename: '発表.pptx', content_type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', file_size: 10 }, { 'content-type': 'application/json' });
   assert.equal(response.statusCode, 201);
+  response = await callApi('init', { student_id: '20260001', original_filename: 'レポート.docx', content_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', file_size: 10 }, { 'content-type': 'application/json' });
+  assert.equal(response.statusCode, 201);
+  response = await callApi('init', { student_id: '20260001', original_filename: '旧形式.doc', content_type: 'application/msword', file_size: 10 }, { 'content-type': 'application/json' });
+  assert.equal(response.statusCode, 201);
   response = await callApi('init', { student_id: '20260001', original_filename: '写真.jpg', content_type: 'image/jpeg', file_size: 10 }, { 'content-type': 'application/json' });
   assert.equal(response.statusCode, 201);
   response = await callApi('chunk', Buffer.from('1234'), { 'content-type': 'application/octet-stream', 'content-length': '4', 'x-upload-token': 'signed-token', 'x-chunk-number': '1' });
@@ -205,12 +209,15 @@ test('Worker saves PDF and multipart PPTX in private R2 and appends D1 rows for 
   assert.equal(response.status, 201);
   response = await submitFile(env, { filename: '写真.png', contentType: 'image/png', bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) });
   assert.equal(response.status, 201);
-  assert.equal(env.SUBMISSIONS_DB.fileRows.length, 3);
+  response = await submitFile(env, { filename: 'レポート.docx', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', bytes: new Uint8Array([0x50, 0x4b, 0x03, 0x04]) });
+  assert.equal(response.status, 201);
+  assert.equal(env.SUBMISSIONS_DB.fileRows.length, 4);
   assert.equal(env.SUBMISSIONS_DB.fileRows[0].student_id, '20260001');
   assert.equal(env.SUBMISSIONS_DB.fileRows[1].student_id, '20260001');
   assert.equal(env.SUBMISSIONS_DB.fileRows[2].original_filename, '写真.png');
+  assert.equal(env.SUBMISSIONS_DB.fileRows[3].original_filename, 'レポート.docx');
   assert.notEqual(env.SUBMISSIONS_DB.fileRows[0].r2_object_key, env.SUBMISSIONS_DB.fileRows[1].r2_object_key);
-  assert.deepEqual(env.SUBMISSION_FILES.multipartParts.slice(-3, -1), [8 * 1024 * 1024, 1024 * 1024]);
+  assert.equal(env.SUBMISSION_FILES.multipartParts.some((size, index, parts) => size === 8 * 1024 * 1024 && parts[index + 1] === 1024 * 1024), true);
   assert.equal([...env.SUBMISSION_FILES.objects.keys()].some(key => key.startsWith('pending/')), false);
   for (const row of env.SUBMISSIONS_DB.fileRows) assert.equal(env.SUBMISSION_FILES.objects.has(row.r2_object_key), true);
 

@@ -46,6 +46,7 @@ test('the standalone submission page contains only assignment submission control
   const html = readFileSync(new URL('../submit.html', import.meta.url), 'utf8');
   assert.match(html, /id="studentId"[^>]*maxlength="50"/u);
   assert.match(html, /id="assignmentFile"[^>]*\.pptx,[^>]*\.pdf/u);
+  assert.match(html, /id="assignmentFile"[^>]*\.docx,[^>]*\.doc/u);
   assert.match(html, /id="assignmentFile"[^>]*\.jpg,[^>]*\.jpeg,[^>]*\.png,[^>]*multiple/u);
   assert.match(html, /4ファイル以上は、3ファイル以内に分けて提出してください/u);
   assert.match(html, /id="submitAssignment"[^>]*>課題を提出</u);
@@ -123,19 +124,19 @@ test('standalone submission accepts and sequentially saves up to three images', 
   assert.equal(elements.assignmentFile.files.length, 0);
 });
 
-test('standalone submission uploads sequentially, reports success, and allows resubmission', async () => {
+test('standalone submission uploads Word, reports success, and allows resubmission', async () => {
   const state = page();
   const elements = state.elements;
   elements.studentId.value = '  TEST001  ';
   elements.studentId.events.input();
-  elements.assignmentFile.files = [assignment('課題.pdf', 'application/pdf', 5)];
+  elements.assignmentFile.files = [assignment('課題.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 5)];
   elements.assignmentFile.events.change();
 
   const upload = state.submit();
   assert.equal(elements.submitAssignment.disabled, true);
   assert.equal(state.requests[0].url, '/api/submit-file?action=init');
   assert.deepEqual(JSON.parse(state.requests[0].options.body), {
-    student_id: 'TEST001', original_filename: '課題.pdf', content_type: 'application/pdf', file_size: 5
+    student_id: 'TEST001', original_filename: '課題.docx', content_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', file_size: 5
   });
   state.requests[0].resolve({ ok: true, status: 201, json: async () => ({ ok: true, upload_token: 'signed-token' }) });
   await waitForRequests(state, 2);
@@ -145,13 +146,13 @@ test('standalone submission uploads sequentially, reports success, and allows re
   await waitForRequests(state, 3);
   assert.equal(state.requests[2].url, '/api/submit-file?action=complete');
   state.requests[2].resolve({ ok: true, status: 201, json: async () => ({
-    ok: true, student_id: 'TEST001', original_filename: '課題.pdf', submitted_at: '2026-10-05T03:04:00.000Z'
+    ok: true, student_id: 'TEST001', original_filename: '課題.docx', submitted_at: '2026-10-05T03:04:00.000Z'
   }) });
   await upload;
 
   assert.match(elements.submissionStatus.textContent, /課題ファイルを提出しました/u);
   assert.match(elements.submissionStatus.textContent, /TEST001/u);
-  assert.match(elements.submissionStatus.textContent, /課題\.pdf/u);
+  assert.match(elements.submissionStatus.textContent, /課題\.docx/u);
   assert.equal(elements.assignmentFile.files.length, 0);
 
   elements.assignmentFile.files = [assignment('再提出.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 3)];

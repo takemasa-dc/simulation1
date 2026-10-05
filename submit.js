@@ -4,7 +4,7 @@
   const MAX_FILE_SIZE = 100 * 1024 * 1024;
   const MAX_FILES = 3;
   const FILE_CHUNK_SIZE = 4 * 1024 * 1024;
-  const FILE_TYPES = new Set(['.pdf', '.pptx', '.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp']);
+  const FILE_TYPES = new Set(['.pdf', '.pptx', '.docx', '.doc', '.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp']);
   const form = document.getElementById('assignmentForm');
   const studentId = document.getElementById('studentId');
   const assignmentFile = document.getElementById('assignmentFile');
@@ -131,7 +131,7 @@
     }
     const invalidType = files.find(file => !FILE_TYPES.has(extension(file.name)));
     if (invalidType) {
-      status.textContent = `「${invalidType.name}」は提出できません．PowerPoint、PDFまたは画像を選択してください．`;
+      status.textContent = `「${invalidType.name}」は提出できません．PowerPoint、Word、PDFまたは画像を選択してください．`;
       status.className = 'error';
       return;
     }

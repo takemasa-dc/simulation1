@@ -81,7 +81,7 @@ D1の既存 `submissions` テーブルには会話ログ提出ごとに新しい
 | `file_size` | バイト単位のファイルサイズ |
 | `r2_object_key` | 重複しない非公開R2オブジェクトキー |
 
-Vercel Functionsにはリクエスト本文の上限があるため、ブラウザは選択されたファイルを4MiBずつ順番に送ります。1回に最大3ファイルを選択でき、各ファイルは100MB以下の `.pptx`、`.pdf`、`.jpg`、`.jpeg`、`.png`、`.heic`、`.heif`、`.webp` を受け付けます。Workerは一時オブジェクトをR2へ保存し、完了時に8MiB単位のmultipart uploadへまとめて最終オブジェクトを作ります。1ファイルごとにD1へ1行追加し、D1記録に失敗した場合は該当する最終オブジェクトを削除します。途中で失敗したmultipart uploadも中止し、残った一時オブジェクトは後述のlifecycle ruleで削除します。
+Vercel Functionsにはリクエスト本文の上限があるため、ブラウザは選択されたファイルを4MiBずつ順番に送ります。1回に最大3ファイルを選択でき、各ファイルは100MB以下の `.pptx`、`.docx`、`.doc`、`.pdf`、`.jpg`、`.jpeg`、`.png`、`.heic`、`.heif`、`.webp` を受け付けます。Workerは一時オブジェクトをR2へ保存し、完了時に8MiB単位のmultipart uploadへまとめて最終オブジェクトを作ります。1ファイルごとにD1へ1行追加し、D1記録に失敗した場合は該当する最終オブジェクトを削除します。途中で失敗したmultipart uploadも中止し、残った一時オブジェクトは後述のlifecycle ruleで削除します。
 
 ### Cloudflare側の初回設定
 
@@ -140,7 +140,7 @@ Vercel Functionsにはリクエスト本文の上限があるため、ブラウ�
    - `SUBMISSION_WORKER_URL`: 手順7で表示されたWorker URL
    - `SUBMISSION_WORKER_SECRET`: `SUBMISSION_SHARED_SECRET` と同じ値
 
-ログ提出APIは学籍番号50文字、会話ログ100,000文字までを受け付けます。ファイル提出APIは学籍番号50文字、元ファイル名255文字、1ファイル100MiBまでを受け付け、PowerPoint、PDF、JPEG、PNG、HEIC、WebPの拡張子とMIMEタイプを検証します。3ファイルの上限は独立提出ページで検証し、各ファイルは既存APIへ順番に送信します。Worker URLを直接呼んでも共有シークレットがなければ保存できません。ブラウザへ共有シークレットやCSV取得トークンは送信しません。
+ログ提出APIは学籍番号50文字、会話ログ100,000文字までを受け付けます。ファイル提出APIは学籍番号50文字、元ファイル名255文字、1ファイル100MiBまでを受け付け、PowerPoint、Word、PDF、JPEG、PNG、HEIC、WebPの拡張子とMIMEタイプを検証します。3ファイルの上限は独立提出ページで検証し、各ファイルは既存APIへ順番に送信します。Worker URLを直接呼んでも共有シークレットがなければ保存できません。ブラウザへ共有シークレットやCSV取得トークンは送信しません。
 
 ### 教員用管理画面と個別ダウンロード
 
