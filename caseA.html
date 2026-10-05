@@ -71,10 +71,16 @@
 <p id="status" role="status" aria-live="polite">質問を入力して、面談を始めてください。</p>
 <section class="copy-box" aria-labelledby="copyTitle">
 <h2 id="copyTitle">Moodleへの提出</h2>
-<p>面談後は「会話ログをコピー」を押し，Moodleの提出欄に貼り付けて提出してください．</p>
+<p>面談後は学籍番号を入力し，「会話ログを提出」を押してください．必要に応じて「会話ログをコピー」から手元にも保存できます．</p>
 <p><strong>再読み込みや画面を閉じると会話が消えます。閉じる前にコピー・提出を済ませてください。</strong></p>
 <button type="button" id="copyLog" disabled>会話ログをコピー</button>
 <p id="copyStatus" role="status" aria-live="polite">まだ会話がありません。回答を受け取るとコピーできます。</p>
+<form id="submitLogForm" class="submit-log-form">
+<label for="studentId">学籍番号</label>
+<input id="studentId" name="student_id" type="text" maxlength="50" autocomplete="off" required>
+<button type="submit" id="submitLog" disabled>会話ログを提出</button>
+<p id="submitStatus" role="status" aria-live="polite"></p>
+</form>
 <div id="manualCopy" hidden>
 <label for="logText">手動コピー用の会話ログ（全文）</label>
 <textarea id="logText" readonly rows="10" aria-describedby="manualHint"></textarea>
