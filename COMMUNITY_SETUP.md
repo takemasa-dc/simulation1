@@ -1,6 +1,6 @@
 # 地域包括ケア演習 事例A・B
 
-新しいページは `/caseA` と `/caseB` です。既存の `/case2`、トップ `/` から `/case2` への転送、`index.html`、`case2.html`、既存の画像は変更しません。新しいフレームワークやnpm依存パッケージはありません。
+事例ページは `/caseA` と `/caseB`、独立した課題ファイル提出ページは `/submit` です。既存の `/case2`、トップ `/` から `/case2` への転送、`index.html`、`case2.html`、既存の画像は変更しません。新しいフレームワークやnpm依存パッケージはありません。
 
 ## APIと非公開設定
 
@@ -19,7 +19,7 @@ Vercelの対象プロジェクト → Settings → Environment Variables に、�
 | `COMMUNITY_CASE_A_PROMPT` | `COMMUNITY_CASE_A_VALUE.txt` の全文（`gzip:`で始まる1行） |
 | `COMMUNITY_CASE_B_PROMPT` | `COMMUNITY_CASE_B_VALUE.txt` の全文（`gzip:`で始まる1行） |
 | `COMMUNITY_MODEL`（任意） | 未設定なら `gpt-4o-mini` |
-| `SUBMISSION_WORKER_URL` | 提出専用WorkerのURL（例：`https://community-log-submissions.<subdomain>.workers.dev`） |
+| `SUBMISSION_WORKER_URL` | `https://community-log-submissions.takemasa-simulation.workers.dev` |
 | `SUBMISSION_WORKER_SECRET` | 提出専用Workerの `SUBMISSION_SHARED_SECRET` と同じランダム値 |
 
 非公開設定の2つの値は合計約34KBです。Node.js Function内でのみ展開します。平文の人物設定も受け付けますが、長い設定書は環境変数の容量上限を超えるため圧縮版を使ってください。環境変数が欠落・破損している場合、該当事例は準備中のエラーを返し、APIを呼びません。
@@ -30,7 +30,7 @@ Vercelの対象プロジェクト → Settings → Environment Variables に、�
 
 1. 既存のGitHub連携プロジェクトを使用します。Framework Presetは静的サイトの `Other`、プロジェクトのルートをこのリポジトリにします。独自のBuild Commandや別のOutput Directoryが既に指定されている場合は、ルートのHTMLと `api/` が配信される設定か確認してください。追加のビルド処理は不要です。
 2. 上記の環境変数を登録します。Node.js 22以上を利用してください。
-3. PRのPreviewを再デプロイし、`/caseA`、`/caseB` を開きます。`cleanUrls: true` は既存設定を維持しています。リダイレクトの追加は不要です。チャットFunctionは `maxDuration: 60`、ログ提出Functionは `maxDuration: 15` です。
+3. PRのPreviewを再デプロイし、`/caseA`、`/caseB`、`/submit` を開きます。`cleanUrls: true` は既存設定を維持しているため、`submit.html` は `/submit` で開けます。リダイレクトの追加は不要です。チャットFunctionは `maxDuration: 60`、ログ提出Functionは `maxDuration: 15`、ファイル提出Functionは `maxDuration: 180` です。
 4. 両事例で質問・話者指定・リセットを試します。開発者ツールのリクエストに非公開設定やAPIキーがなく、返却内容が `reply` と `userMessage` だけであることを確認します。
 5. `/` の転送先が `/case2` であること、既存ページ・画像が変わっていないことを確認します。
 6. PRをマージすると通常のGit連携デプロイで本番へ反映されます。環境変数変更後は新しいデプロイが必要です。本PRでは本番マージ・本番設定変更は行いません。
@@ -54,11 +54,13 @@ Vercelの対象プロジェクト → Settings → Environment Variables に、�
 
 LLMの回答を通じた設定開示を完全に防ぐことはできません。役割変更や設定一覧の要求に従わない指示に加え、許可した話者の発言形式になっていない応答は学生へ出さずエラーにします。これは内容を完全に検証する仕組みではなく、教員による対話例の確認は必要です。人物の生活情報は、本来の質問に応じて明らかになる設計です。特定キーワードによる情報開示判定はありません。
 
-## 会話ログ提出用Cloudflare WorkerとD1
+## 会話ログ・課題ファイル提出用Cloudflare Worker
 
-既存のOpenAI中継Workerのソースはこのリポジトリに含まれていません。既存チャットを壊さないため、ログ提出は `cloudflare/submission-worker/` の専用Workerへ分離します。学生画面からは同一オリジンの `/api/submit-log` を呼び、Vercel Functionが共有シークレットを付けて提出Workerへ転送します。提出WorkerはOpenAI APIを呼びません。
+既存のOpenAI中継Workerのソースはこのリポジトリに含まれていません。既存チャットを壊さないため、ログと課題ファイルの提出は `cloudflare/submission-worker/` の専用Workerへ分離します。事例A・Bの会話ログ提出は同一オリジンの `/api/submit-log`、独立した `/submit` ページの課題ファイル提出は `/api/submit-file` を呼びます。どちらもVercel Functionが共有シークレットを付けて提出Workerへ転送し、提出WorkerはOpenAI APIを呼びません。
 
-D1には提出ごとに新しい行を追加し、次の4項目を保存します。
+`/submit` は事例A・B、会話履歴、面談回数、relationship state、会話ログ提出から独立しています。大学システム障害時にも単独URLとして案内できます。学籍番号と課題ファイル以外の入力は求めません。
+
+D1の既存 `submissions` テーブルには会話ログ提出ごとに新しい行を追加し、次の4項目を保存します。
 
 | 列 | 内容 |
 | --- | --- |
@@ -67,42 +69,91 @@ D1には提出ごとに新しい行を追加し、次の4項目を保存しま�
 | `submitted_at` | Workerが記録したUTCのISO 8601日時 |
 | `conversation_log` | ログコピーボタンと同じ会話全文 |
 
+課題ファイル本体は非公開のCloudflare R2 bucketへ保存し、D1の新しい `file_submissions` テーブルには提出ごとに次のメタデータを保存します。再提出は既存行や既存オブジェクトを上書きしません。
+
+| 列 | 内容 |
+| --- | --- |
+| `id` | 自動採番 |
+| `student_id` | 前後の空白を除去した学籍番号 |
+| `submitted_at` | Workerが記録したUTCのISO 8601日時 |
+| `original_filename` | 学生が選択した元のファイル名 |
+| `content_type` | 検証済みのMIMEタイプ |
+| `file_size` | バイト単位のファイルサイズ |
+| `r2_object_key` | 重複しない非公開R2オブジェクトキー |
+
+Vercel Functionsにはリクエスト本文の上限があるため、ブラウザは選択されたファイルを4MiBずつ順番に送ります。1回に最大3ファイルを選択でき、各ファイルは100MB以下の `.pptx`、`.docx`、`.doc`、`.pdf`、`.jpg`、`.jpeg`、`.png`、`.heic`、`.heif`、`.webp` を受け付けます。Workerは一時オブジェクトをR2へ保存し、完了時に8MiB単位のmultipart uploadへまとめて最終オブジェクトを作ります。1ファイルごとにD1へ1行追加し、D1記録に失敗した場合は該当する最終オブジェクトを削除します。途中で失敗したmultipart uploadも中止し、残った一時オブジェクトは後述のlifecycle ruleで削除します。
+
 ### Cloudflare側の初回設定
 
 以下は `cloudflare/submission-worker` ディレクトリで実行します。Cloudflareへのログインが必要です。
 
 1. `wrangler.toml.example` を `wrangler.toml` にコピーします。
-2. D1を作成します。
+2. D1を作成済みでない場合だけ、次を実行します。既存の `community-care-submissions` は再作成しません。
 
    ```text
    npx wrangler@latest d1 create community-care-submissions --location apac
    ```
 
 3. 表示された `database_id` を `wrangler.toml` の `REPLACE_WITH_D1_DATABASE_ID` と置き換えます。binding名 `SUBMISSIONS_DB` は変更しません。
-4. マイグレーションを本番D1へ適用します。
+4. 非公開R2 bucketを作成します。bucket名は `community-care-assignment-files`、Worker binding名は `SUBMISSION_FILES` です。
+
+   ```text
+   npx wrangler@latest r2 bucket create community-care-assignment-files --location apac
+   ```
+
+   `wrangler.toml` に、`wrangler.toml.example` と同じ次のbindingを追加します。
+
+   ```toml
+   [[r2_buckets]]
+   binding = "SUBMISSION_FILES"
+   bucket_name = "community-care-assignment-files"
+   ```
+
+   bucketに `r2.dev` や独自ドメインを設定せず、Public Accessは無効のままにします。
+
+5. 既存D1へ新しいマイグレーションを適用します。既に適用済みの `0001` は再実行されず、`0002_create_file_submissions.sql` が追加適用されます。
 
    ```text
    npx wrangler@latest d1 migrations apply community-care-submissions --remote
    ```
 
-5. Workerをデプロイします。
+6. 中断されたアップロードの一時オブジェクトを自動削除するlifecycle ruleを追加します。
+
+   ```text
+   npx wrangler@latest r2 bucket lifecycle add community-care-assignment-files cleanup-pending pending/ --expire-days 1
+   ```
+
+7. Workerをデプロイします。
 
    ```text
    npx wrangler@latest deploy
    ```
 
-6. 異なる十分に長いランダム値を2つ用意し、WorkerのSecretとして登録します。値はGitHubへ保存しません。
+8. 既存環境にSecretがまだない場合だけ、異なる十分に長いランダム値を2つ登録します。今回追加するSecretはありません。値はGitHubへ保存しません。
 
    ```text
    npx wrangler@latest secret put SUBMISSION_SHARED_SECRET
    npx wrangler@latest secret put ADMIN_EXPORT_TOKEN
    ```
 
-7. Vercelの `simulation1` プロジェクトで、Production（必要ならPreviewにも）へ次を登録して再デプロイします。
-   - `SUBMISSION_WORKER_URL`: 手順5で表示されたWorker URL
+9. Vercelの `simulation1` プロジェクトで、Production（必要ならPreviewにも）に既存の次の値があることを確認して再デプロイします。今回追加するVercel環境変数はありません。
+   - `SUBMISSION_WORKER_URL`: 手順7で表示されたWorker URL
    - `SUBMISSION_WORKER_SECRET`: `SUBMISSION_SHARED_SECRET` と同じ値
 
-提出APIは学籍番号50文字、会話ログ100,000文字までを受け付けます。Worker URLを直接呼んでも共有シークレットがなければ保存できません。ブラウザへ共有シークレットやCSV取得トークンは送信しません。
+ログ提出APIは学籍番号50文字、会話ログ100,000文字までを受け付けます。ファイル提出APIは学籍番号50文字、元ファイル名255文字、1ファイル100MiBまでを受け付け、PowerPoint、Word、PDF、JPEG、PNG、HEIC、WebPの拡張子とMIMEタイプを検証します。3ファイルの上限は独立提出ページで検証し、各ファイルは既存APIへ順番に送信します。Worker URLを直接呼んでも共有シークレットがなければ保存できません。ブラウザへ共有シークレットやCSV取得トークンは送信しません。
+
+### 教員用管理画面と個別ダウンロード
+
+管理画面のURLは `https://community-log-submissions.takemasa-simulation.workers.dev/admin` です。一覧は提出日時の新しい順に、学籍番号、提出日時、元のファイル名、ファイルサイズ、個別ダウンロードボタンを表示します。ダウンロード時だけ認証済みWorkerが非公開R2から読み出し、`Content-Disposition` に元のファイル名を設定します。R2の公開URLは発行しません。
+
+Cloudflare Accessを `/admin*` に適用し、教員のメールアドレスだけをAllowにしてください。Worker全体を保護すると学生からの提出も遮断されるため、対象hostnameとpathを管理画面に限定します。
+
+1. `takemasa-simulation`アカウントのCloudflare Zero Trustで、**Access controls → Applications** からSelf-hosted applicationを追加します。
+2. application domainを `community-log-submissions.takemasa-simulation.workers.dev/admin*` にします。
+3. Allow policyに教員のメールアドレス（または大学管理のメールグループ）だけを登録します。
+4. 管理画面を開き、Cloudflare Accessで教員メールの認証を行います。認証後はトークン入力なしで一覧が自動表示され、個別ダウンロードもそのまま利用できます。
+
+Workerは `/admin` と `/admin/api/*` の両方でCloudflareが提供する `ctx.access` を確認し、Access認証済みで有効なメールアドレスを取得できないリクエストを403で拒否します。Cloudflare Accessを設定していない状態では管理画面を利用できません。本番利用前に上記Access設定を完了してください。`ADMIN_EXPORT_TOKEN` は管理画面では使用せず、既存の `/export.csv` のコマンドライン取得だけに使用します。
 
 ### 教員用CSVの取得
 
@@ -114,14 +165,14 @@ PowerShellでは、トークンを画面入力して次のように保存でき�
 $secureToken = Read-Host "ADMIN_EXPORT_TOKEN" -AsSecureString
 $adminToken = [System.Net.NetworkCredential]::new('', $secureToken).Password
 $headers = @{ Authorization = "Bearer $adminToken" }
-Invoke-WebRequest -Uri "<提出WorkerのURL>/export.csv" -Headers $headers -OutFile "submissions.csv"
+Invoke-WebRequest -Uri "https://community-log-submissions.takemasa-simulation.workers.dev/export.csv" -Headers $headers -OutFile "submissions.csv"
 ```
 
 取得後は `Remove-Variable adminToken, secureToken` でセッション内の変数を削除してください。CSVには学籍番号と会話内容が含まれるため、大学の規程に沿って保管します。
 
 ## 検証と更新
 
-`node --test tests/community-chat.test.mjs tests/community-ui.test.mjs tests/relationship-state.test.mjs tests/submit-log.test.mjs` で入力検証、非公開設定の分離、履歴保持、50並列の独立性、APIエラー・制限、二重送信、リセット、ログ提出、D1への追記、CSV出力をモック検証します。テストには非公開の事例情報を含めません。
+`node --test tests/community-chat.test.mjs tests/community-ui.test.mjs tests/relationship-state.test.mjs tests/submit-log.test.mjs tests/file-submission.test.mjs tests/submit-ui.test.mjs` で入力検証、非公開設定の分離、履歴保持、50並列の独立性、APIエラー・制限、二重送信、リセット、ログ提出、独立提出ページ、ファイル分割送信、R2保存、D1への追記、管理認証、個別ダウンロード、CSV出力をモック検証します。テストには非公開の事例情報を含めません。
 
 設定を更新する場合はリポジトリ外の人物設定テキストを編集し、次を実行して新しい環境変数の値を生成します。
 
@@ -131,4 +182,4 @@ node scripts/encode-prompt.mjs <教師用の人物設定.txt> <教師用のVALUE
 
 環境変数を更新して再デプロイしてください。学生向け公開情報を変更する場合はHTMLも編集してください。
 
-仕様参照：[Vercel Node.js Functions](https://vercel.com/docs/functions/runtimes/node-js)、[環境変数](https://vercel.com/docs/environment-variables)、[GPT-4o mini](https://developers.openai.com/api/docs/models/gpt-4o-mini)、[Chat Completions](https://developers.openai.com/api/reference/resources/chat)。
+仕様参照：[Vercel Node.js Functions](https://vercel.com/docs/functions/runtimes/node-js)、[Vercel Functionsの制限](https://vercel.com/docs/functions/limitations)、[環境変数](https://vercel.com/docs/environment-variables)、[R2へのオブジェクト保存](https://developers.cloudflare.com/r2/objects/upload-objects/)、[R2 Workers API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/)、[Cloudflare AccessによるWorker保護](https://developers.cloudflare.com/workers/configuration/cloudflare-access/)、[GPT-4o mini](https://developers.openai.com/api/docs/models/gpt-4o-mini)、[Chat Completions](https://developers.openai.com/api/reference/resources/chat)。
