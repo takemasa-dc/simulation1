@@ -19,6 +19,8 @@ Vercelの対象プロジェクト → Settings → Environment Variables に、�
 | `COMMUNITY_CASE_A_PROMPT` | `COMMUNITY_CASE_A_VALUE.txt` の全文（`gzip:`で始まる1行） |
 | `COMMUNITY_CASE_B_PROMPT` | `COMMUNITY_CASE_B_VALUE.txt` の全文（`gzip:`で始まる1行） |
 | `COMMUNITY_MODEL`（任意） | 未設定なら `gpt-4o-mini` |
+| `SUBMISSION_WORKER_URL` | 提出専用WorkerのURL（例：`https://community-log-submissions.<subdomain>.workers.dev`） |
+| `SUBMISSION_WORKER_SECRET` | 提出専用Workerの `SUBMISSION_SHARED_SECRET` と同じランダム値 |
 
 非公開設定の2つの値は合計約34KBです。Node.js Function内でのみ展開します。平文の人物設定も受け付けますが、長い設定書は環境変数の容量上限を超えるため圧縮版を使ってください。環境変数が欠落・破損している場合、該当事例は準備中のエラーを返し、APIを呼びません。
 
@@ -28,7 +30,7 @@ Vercelの対象プロジェクト → Settings → Environment Variables に、�
 
 1. 既存のGitHub連携プロジェクトを使用します。Framework Presetは静的サイトの `Other`、プロジェクトのルートをこのリポジトリにします。独自のBuild Commandや別のOutput Directoryが既に指定されている場合は、ルートのHTMLと `api/` が配信される設定か確認してください。追加のビルド処理は不要です。
 2. 上記の環境変数を登録します。Node.js 22以上を利用してください。
-3. PRのPreviewを再デプロイし、`/caseA`、`/caseB` を開きます。`cleanUrls: true` は既存設定を維持しています。リダイレクトの追加は不要です。新規Functionのみ `maxDuration: 60` を指定しています。
+3. PRのPreviewを再デプロイし、`/caseA`、`/caseB` を開きます。`cleanUrls: true` は既存設定を維持しています。リダイレクトの追加は不要です。チャットFunctionは `maxDuration: 60`、ログ提出Functionは `maxDuration: 15` です。
 4. 両事例で質問・話者指定・リセットを試します。開発者ツールのリクエストに非公開設定やAPIキーがなく、返却内容が `reply` と `userMessage` だけであることを確認します。
 5. `/` の転送先が `/case2` であること、既存ページ・画像が変わっていないことを確認します。
 6. PRをマージすると通常のGit連携デプロイで本番へ反映されます。環境変数変更後は新しいデプロイが必要です。本PRでは本番マージ・本番設定変更は行いません。
@@ -37,9 +39,9 @@ Vercelの対象プロジェクト → Settings → Environment Variables に、�
 
 ## 50人程度での利用
 
-- 各学生・各タブの履歴はブラウザメモリに独立して保持します。サーバーに共通の会話配列を持たず、質問ごとにその学生の全履歴を送ります。再読み込み・タブを閉じる・リセットで消えます。
-- 送信中は入力と送信を無効にします。日本語IMEのEnter確定では送信しません。1回の質問は2,000文字まで、1面談60往復・履歴80,000文字まで。履歴を黙って切り捨てることはありません。
-- 失敗した質問は入力欄に残ります。成功するまでは履歴へ追加しないため、再送で同じ質問が二重に履歴へ入りません。45秒で上流通信を打ち切り、画面側は55秒で待機を終了します。リセット中の古い応答は新しい会話へ追加しません。
+- 各学生・各タブの履歴はブラウザメモリに独立して保持します。サーバーに共通の会話配列を持たず、質問ごとにその学生の全履歴を送ります。再読み込み・タブを閉じる・リセットで消えます。通常の面談時間は25回を目安とし、28回目の回答後に入力を終了します。事例別の累積API利用回数はブラウザの `localStorage` に保存し、40回で停止します。
+- 送信中は入力と送信を無効にします。日本語IMEのEnter確定では送信しません。1回の質問は2,000文字までです。API側には履歴60往復・80,000文字の安全上限があり、履歴を黙って切り捨てることはありません。
+- 失敗した質問は入力欄に残ります。成功するまでは履歴へ追加しないため、再送で同じ質問が二重に履歴へ入りません。画面側は28回目の回答後に面談を終了します。45秒で上流通信を打ち切り、画面側は55秒で待機を終了します。リセット中の古い応答は新しい会話へ追加しません。
 - 429は `Retry-After`（秒またはHTTP日時）に従って待機表示します。ヘッダーがなければ30秒、最大1時間です。自動再送はしません。利用枠不足は担当教員への連絡を表示します。上流のエラー本文は学生へ転送しません。
 - リセット・タイムアウトで通信を中止しても、既にWorkers/OpenAIへ渡った生成の課金停止は保証できません。
 - **画面の多重送信防止は、サーバー全体の利用制限ではありません。** 認証・共有ストレージによる厳密な学生別クォータは追加していません。URLを知っている利用者は呼び出せるため、公開範囲と利用期間を授業に合わせて管理してください。Origin検査も認証の代替ではありません。
@@ -52,9 +54,74 @@ Vercelの対象プロジェクト → Settings → Environment Variables に、�
 
 LLMの回答を通じた設定開示を完全に防ぐことはできません。役割変更や設定一覧の要求に従わない指示に加え、許可した話者の発言形式になっていない応答は学生へ出さずエラーにします。これは内容を完全に検証する仕組みではなく、教員による対話例の確認は必要です。人物の生活情報は、本来の質問に応じて明らかになる設計です。特定キーワードによる情報開示判定はありません。
 
+## 会話ログ提出用Cloudflare WorkerとD1
+
+既存のOpenAI中継Workerのソースはこのリポジトリに含まれていません。既存チャットを壊さないため、ログ提出は `cloudflare/submission-worker/` の専用Workerへ分離します。学生画面からは同一オリジンの `/api/submit-log` を呼び、Vercel Functionが共有シークレットを付けて提出Workerへ転送します。提出WorkerはOpenAI APIを呼びません。
+
+D1には提出ごとに新しい行を追加し、次の4項目を保存します。
+
+| 列 | 内容 |
+| --- | --- |
+| `id` | 自動採番 |
+| `student_id` | 前後の空白を除去した学籍番号 |
+| `submitted_at` | Workerが記録したUTCのISO 8601日時 |
+| `conversation_log` | ログコピーボタンと同じ会話全文 |
+
+### Cloudflare側の初回設定
+
+以下は `cloudflare/submission-worker` ディレクトリで実行します。Cloudflareへのログインが必要です。
+
+1. `wrangler.toml.example` を `wrangler.toml` にコピーします。
+2. D1を作成します。
+
+   ```text
+   npx wrangler@latest d1 create community-care-submissions --location apac
+   ```
+
+3. 表示された `database_id` を `wrangler.toml` の `REPLACE_WITH_D1_DATABASE_ID` と置き換えます。binding名 `SUBMISSIONS_DB` は変更しません。
+4. マイグレーションを本番D1へ適用します。
+
+   ```text
+   npx wrangler@latest d1 migrations apply community-care-submissions --remote
+   ```
+
+5. Workerをデプロイします。
+
+   ```text
+   npx wrangler@latest deploy
+   ```
+
+6. 異なる十分に長いランダム値を2つ用意し、WorkerのSecretとして登録します。値はGitHubへ保存しません。
+
+   ```text
+   npx wrangler@latest secret put SUBMISSION_SHARED_SECRET
+   npx wrangler@latest secret put ADMIN_EXPORT_TOKEN
+   ```
+
+7. Vercelの `simulation1` プロジェクトで、Production（必要ならPreviewにも）へ次を登録して再デプロイします。
+   - `SUBMISSION_WORKER_URL`: 手順5で表示されたWorker URL
+   - `SUBMISSION_WORKER_SECRET`: `SUBMISSION_SHARED_SECRET` と同じ値
+
+提出APIは学籍番号50文字、会話ログ100,000文字までを受け付けます。Worker URLを直接呼んでも共有シークレットがなければ保存できません。ブラウザへ共有シークレットやCSV取得トークンは送信しません。
+
+### 教員用CSVの取得
+
+一般利用者向けの取得APIはありません。提出専用Workerの `/export.csv` を、`ADMIN_EXPORT_TOKEN` を持つ教員だけが呼び出します。CSVは `id,student_id,submitted_at,conversation_log` の順で、全提出を古い順に含みます。同じ学籍番号の再提出も別行です。
+
+PowerShellでは、トークンを画面入力して次のように保存できます。
+
+```powershell
+$secureToken = Read-Host "ADMIN_EXPORT_TOKEN" -AsSecureString
+$adminToken = [System.Net.NetworkCredential]::new('', $secureToken).Password
+$headers = @{ Authorization = "Bearer $adminToken" }
+Invoke-WebRequest -Uri "<提出WorkerのURL>/export.csv" -Headers $headers -OutFile "submissions.csv"
+```
+
+取得後は `Remove-Variable adminToken, secureToken` でセッション内の変数を削除してください。CSVには学籍番号と会話内容が含まれるため、大学の規程に沿って保管します。
+
 ## 検証と更新
 
-`node --test tests/community-chat.test.mjs tests/community-ui.test.mjs` で入力検証、非公開設定の分離、履歴保持、50並列の独立性、APIエラー・制限、二重送信、リセットと古い応答、IME操作をモック検証します。テストには非公開の事例情報を含めません。
+`node --test tests/community-chat.test.mjs tests/community-ui.test.mjs tests/relationship-state.test.mjs tests/submit-log.test.mjs` で入力検証、非公開設定の分離、履歴保持、50並列の独立性、APIエラー・制限、二重送信、リセット、ログ提出、D1への追記、CSV出力をモック検証します。テストには非公開の事例情報を含めません。
 
 設定を更新する場合はリポジトリ外の人物設定テキストを編集し、次を実行して新しい環境変数の値を生成します。
 

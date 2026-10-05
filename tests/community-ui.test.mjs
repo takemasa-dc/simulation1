@@ -14,12 +14,13 @@ function screen(caseId = 'A', clipboard, compact = false, storage = new Map()) {
     select() { this.selected = true; }, setSelectionRange(start, end) { this.selection = [start, end]; },
     requestSubmit() { return this.events.submit({ preventDefault() {} }); }
   });
-  for (const id of ['chat','chatForm','userInput','target','send','reset','status','copyLog','copyStatus','manualCopy','logText','selectLog','interviewProgress']) elements[id] = make();
+  for (const id of ['chat','chatForm','userInput','target','send','reset','status','copyLog','copyStatus','manualCopy','logText','selectLog','submitLogForm','studentId','submitLog','submitStatus','interviewProgress']) elements[id] = make();
   elements.target.value = caseId === 'A' ? 'kazuko' : 'auto';
   const requests = [];
   const intervals = new Map();
   const copied = [];
   let time = 1000, timer = 0, confirms = true;
+  class MockDate extends Date { static now() { return time; } }
   vm.runInNewContext(source, {
     document: { body: { dataset: {case:caseId} }, getElementById: id => elements[id], createElement: make },
     window: { confirm: () => confirms, matchMedia: () => ({ matches: compact }) }, AbortController, TypeError,
@@ -28,7 +29,7 @@ function screen(caseId = 'A', clipboard, compact = false, storage = new Map()) {
       setItem: (key, value) => storage.set(key, String(value))
     },
     navigator: { clipboard: clipboard === null ? undefined : clipboard || { writeText: async text => { copied.push(text); } } },
-    Date: { now: () => time },
+    Date: MockDate,
     setTimeout: () => ++timer, clearTimeout() {},
     setInterval: fn => { intervals.set(++timer,fn); return timer; }, clearInterval: id => intervals.delete(id),
     fetch: (url, options) => new Promise((resolve,reject) => requests.push({url,options,resolve,reject}))
@@ -37,11 +38,12 @@ function screen(caseId = 'A', clipboard, compact = false, storage = new Map()) {
     elements, requests, copied, storage,
     copy: () => elements.copyLog.events.click(),
     submit: () => elements.chatForm.requestSubmit(),
+    submitConversation: () => elements.submitLogForm.requestSubmit(),
     reset: () => elements.reset.events.click(),
     confirm: value => { confirms=value; },
     advance: ms => {time+=ms; for (const fn of intervals.values()) fn();},
     reply: (index, status=200, body={reply:'和子「こんにちは」',userMessage:'質問'}) => {
-      requests[index].resolve({ok:status===200,status,json:async()=>body});
+      requests[index].resolve({ok:status>=200&&status<300,status,json:async()=>body});
     }
   };
 }
@@ -206,6 +208,13 @@ test('meeting gauge reaches zero at 25, allows 26-27, and ends after the 28th re
   e.userInput.value='質問29';await s.submit();
   assert.equal(s.requests.length,28);
   await s.copy();assert.match(s.copied[0],/回答28/);
+  e.studentId.value='20260001';e.studentId.events.input();
+  const submission=s.submitConversation();
+  assert.equal(s.requests.length,29);
+  assert.equal(s.requests[28].url,'/api/submit-log');
+  s.reply(28,201,{ok:true,submitted_at:'2026-10-05T03:04:00.000Z'});await submission;
+  assert.match(e.submitStatus.textContent,/会話ログを提出しました/);
+  assert.equal(e.copyLog.disabled,false);
 });
 
 test('reload and reset restart the meeting gauge but retain per-case cumulative usage', async () => {
@@ -258,6 +267,58 @@ test('both case pages show the interview-time gauge and explain that it is not e
     const html=readFileSync(new URL(file,import.meta.url),'utf8');
     assert.match(html,/id="interviewProgress"/);
     assert.match(html,/面談時間の目安は，質問回数に応じて減っていきます．実際の経過時間を計測しているものではありません．/);
+    assert.match(html,/id="studentId"[^>]*maxlength="50"/u);
+    assert.match(html,/id="submitLog"/u);
     assert.doesNotMatch(html,/\d+\s*\/\s*25/u);
+  }
+});
+
+test('student ID and a conversation are required, and copy and submission use the identical log', async () => {
+  const s=screen('A'),e=s.elements;
+  await s.submitConversation();
+  assert.equal(s.requests.length,0);
+  assert.match(e.submitStatus.textContent,/学籍番号を入力/);
+
+  e.studentId.value='  20260001  ';e.studentId.events.input();
+  assert.equal(e.submitLog.disabled,true);
+  await complete(s,'普段は？','和子「花の世話をしています。」','kazuko');
+  assert.equal(e.submitLog.disabled,false);
+  await s.copy();
+  const submission=s.submitConversation();
+  assert.equal(e.studentId.value,'20260001');
+  assert.equal(e.submitLog.disabled,true);
+  assert.equal(e.studentId.disabled,true);
+  const request=s.requests.at(-1);
+  assert.equal(request.url,'/api/submit-log');
+  const body=JSON.parse(request.options.body);
+  assert.equal(body.student_id,'20260001');
+  assert.equal(body.conversation_log,s.copied[0]);
+  request.resolve({ok:true,status:201,json:async()=>({ok:true,submitted_at:'2026-10-05T03:04:00.000Z'})});
+  await submission;
+  assert.match(e.submitStatus.textContent,/会話ログを提出しました/);
+  assert.match(e.submitStatus.textContent,/提出日時：/);
+  assert.equal(e.chat.children.length,2);
+  assert.equal(e.copyLog.disabled,false);
+});
+
+test('submission prevents double clicks, allows repeat submissions, and failures keep both case logs', async () => {
+  for (const [caseId,reply] of [['A','和子「回答」'],['B','正夫「回答」']]) {
+    const s=screen(caseId),e=s.elements;
+    await complete(s,'質問',reply,caseId==='A'?'kazuko':undefined);
+    e.studentId.value='same-id';e.studentId.events.input();
+
+    const first=s.submitConversation();await s.submitConversation();
+    const firstRequest=s.requests.at(-1);
+    assert.equal(s.requests.filter(request=>request.url==='/api/submit-log').length,1);
+    firstRequest.resolve({ok:true,status:201,json:async()=>({ok:true,submitted_at:'2026-10-05T03:04:00.000Z'})});await first;
+
+    const second=s.submitConversation();
+    const secondRequest=s.requests.at(-1);
+    assert.equal(s.requests.filter(request=>request.url==='/api/submit-log').length,2);
+    secondRequest.resolve({ok:false,status:502,json:async()=>({error:'unavailable'})});await second;
+    assert.match(e.submitStatus.textContent,/提出できませんでした/);
+    assert.equal(e.chat.children.length,2);
+    assert.equal(e.copyLog.disabled,false);
+    assert.equal(e.submitLog.disabled,false);
   }
 });

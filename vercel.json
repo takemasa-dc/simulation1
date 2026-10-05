@@ -1,7 +1,8 @@
 {
   "cleanUrls": true,
   "functions": {
-    "api/community-chat.mjs": { "maxDuration": 60 }
+    "api/community-chat.mjs": { "maxDuration": 60 },
+    "api/submit-log.mjs": { "maxDuration": 15 }
   },
   "redirects": [
     {

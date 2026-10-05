@@ -13,6 +13,10 @@
   const manualCopy = document.getElementById('manualCopy');
   const logText = document.getElementById('logText');
   const selectLog = document.getElementById('selectLog');
+  const submitLogForm = document.getElementById('submitLogForm');
+  const studentId = document.getElementById('studentId');
+  const submitLog = document.getElementById('submitLog');
+  const submitStatus = document.getElementById('submitStatus');
   const interviewProgress = document.getElementById('interviewProgress');
   const usageKey = `community_case${caseId}_totalUsage`;
   const MEETING_TARGET = 25;
@@ -23,6 +27,7 @@
   // Selection metadata only; the conversation itself remains in history.
   let questionTargets = [];
   let copying = false;
+  let submitting = false;
   let pending = null;
   let generation = 0;
   let blockedUntil = 0;
@@ -109,6 +114,7 @@
       if (!manualCopy.hidden) logText.value = conversationText();
       copyStatus.textContent = '最新の会話全文をコピーできます。';
     }
+    updateSubmissionControls();
   }
   copy.addEventListener('click', async () => {
     if (copying || !history.length) return;
@@ -139,6 +145,69 @@
     logText.focus();
     logText.select();
     logText.setSelectionRange(0, logText.value.length);
+  });
+
+  function updateSubmissionControls() {
+    const hasStudentId = !!studentId.value.trim();
+    submitLog.disabled = submitting || !hasStudentId || history.length === 0;
+    studentId.disabled = submitting;
+    submitLog.textContent = submitting ? '提出しています…' : '会話ログを提出';
+  }
+
+  function formatSubmittedAt(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const pad = number => String(number).padStart(2, '0');
+    return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
+  studentId.addEventListener('input', updateSubmissionControls);
+  submitLogForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (submitting) return;
+    const normalizedStudentId = studentId.value.trim();
+    studentId.value = normalizedStudentId;
+    if (!normalizedStudentId) {
+      submitStatus.textContent = '学籍番号を入力してください．';
+      submitStatus.className = 'error';
+      updateSubmissionControls();
+      studentId.focus();
+      return;
+    }
+    if (!history.length) {
+      submitStatus.textContent = '提出できる会話ログがまだありません．';
+      submitStatus.className = 'error';
+      updateSubmissionControls();
+      return;
+    }
+
+    const conversationLog = conversationText();
+    submitting = true;
+    updateSubmissionControls();
+    submitStatus.textContent = '会話ログを提出しています…';
+    submitStatus.className = '';
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    try {
+      const response = await fetch('/api/submit-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: normalizedStudentId, conversation_log: conversationLog }),
+        signal: controller.signal
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.ok !== true) throw new Error('submission failed');
+      const displayTime = formatSubmittedAt(data.submitted_at);
+      submitStatus.textContent = `会話ログを提出しました．${displayTime ? ` 提出日時：${displayTime}` : ''}`;
+      submitStatus.className = '';
+    } catch {
+      submitStatus.textContent = '提出できませんでした．通信環境を確認して，もう一度お試しください．会話ログは「ログをコピー」から保存できます．';
+      submitStatus.className = 'error';
+    } finally {
+      clearTimeout(timeout);
+      submitting = false;
+      updateSubmissionControls();
+    }
   });
 
   function render(text, sender) {
@@ -263,6 +332,8 @@
     copying = false;
     updateInterviewProgress();
     refreshCopyLog();
+    submitStatus.textContent = '';
+    submitStatus.className = '';
     chat.replaceChildren();
     input.value = '';
     if (target) target.value = caseId === 'A' ? 'kazuko' : 'auto';

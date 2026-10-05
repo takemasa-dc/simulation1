@@ -1,4 +1,6 @@
 .vercel
 .env*
 !.env.example
+.dev.vars*
+cloudflare/submission-worker/wrangler.toml
 private/
