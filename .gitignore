@@ -3,4 +3,5 @@
 !.env.example
 .dev.vars*
 cloudflare/submission-worker/wrangler.toml
+cloudflare/submission-worker/.wrangler/
 private/

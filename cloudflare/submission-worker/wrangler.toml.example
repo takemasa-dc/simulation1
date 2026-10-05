@@ -8,3 +8,7 @@ binding = "SUBMISSIONS_DB"
 database_name = "community-care-submissions"
 database_id = "REPLACE_WITH_D1_DATABASE_ID"
 migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "SUBMISSION_FILES"
+bucket_name = "community-care-assignment-files"

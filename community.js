@@ -17,17 +17,26 @@
   const studentId = document.getElementById('studentId');
   const submitLog = document.getElementById('submitLog');
   const submitStatus = document.getElementById('submitStatus');
+  const submitFileForm = document.getElementById('submitFileForm');
+  const assignmentFile = document.getElementById('assignmentFile');
+  const submitFile = document.getElementById('submitFile');
+  const fileUploadProgress = document.getElementById('fileUploadProgress');
+  const fileSubmitStatus = document.getElementById('fileSubmitStatus');
   const interviewProgress = document.getElementById('interviewProgress');
   const usageKey = `community_case${caseId}_totalUsage`;
   const MEETING_TARGET = 25;
   const MEETING_LIMIT = 28;
   const TOTAL_USAGE_LIMIT = 40;
+  const MAX_FILE_SIZE = 100 * 1024 * 1024;
+  const FILE_CHUNK_SIZE = 4 * 1024 * 1024;
+  const FILE_TYPES = new Set(['.pdf', '.pptx']);
   // Conversation history remains in memory; localStorage contains only the per-case cumulative request count.
   let history = [];
   // Selection metadata only; the conversation itself remains in history.
   let questionTargets = [];
   let copying = false;
   let submitting = false;
+  let fileSubmitting = false;
   let pending = null;
   let generation = 0;
   let blockedUntil = 0;
@@ -149,9 +158,12 @@
 
   function updateSubmissionControls() {
     const hasStudentId = !!studentId.value.trim();
-    submitLog.disabled = submitting || !hasStudentId || history.length === 0;
-    studentId.disabled = submitting;
+    submitLog.disabled = submitting || fileSubmitting || !hasStudentId || history.length === 0;
+    submitFile.disabled = fileSubmitting || submitting || !hasStudentId || !assignmentFile.files?.length;
+    studentId.disabled = submitting || fileSubmitting;
     submitLog.textContent = submitting ? '提出しています…' : '会話ログを提出';
+    assignmentFile.disabled = fileSubmitting;
+    submitFile.textContent = fileSubmitting ? '提出しています…' : '課題ファイルを提出';
   }
 
   function formatSubmittedAt(value) {
@@ -162,6 +174,11 @@
   }
 
   studentId.addEventListener('input', updateSubmissionControls);
+  assignmentFile.addEventListener('change', () => {
+    fileSubmitStatus.textContent = '';
+    fileSubmitStatus.className = '';
+    updateSubmissionControls();
+  });
   submitLogForm.addEventListener('submit', async event => {
     event.preventDefault();
     if (submitting) return;
@@ -206,6 +223,128 @@
     } finally {
       clearTimeout(timeout);
       submitting = false;
+      updateSubmissionControls();
+    }
+  });
+
+  function fileExtension(filename) {
+    const index = filename.lastIndexOf('.');
+    return index >= 0 ? filename.slice(index).toLowerCase() : '';
+  }
+
+  async function fileApi(action, { json, body, uploadToken, chunkNumber, timeoutMs = 30000 } = {}) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const headers = {};
+    if (json !== undefined) headers['Content-Type'] = 'application/json';
+    if (body !== undefined) headers['Content-Type'] = 'application/octet-stream';
+    if (uploadToken) headers['X-Upload-Token'] = uploadToken;
+    if (chunkNumber) headers['X-Chunk-Number'] = String(chunkNumber);
+    try {
+      const response = await fetch(`/api/submit-file?action=${action}`, {
+        method: 'POST',
+        headers,
+        body: json !== undefined ? JSON.stringify(json) : body,
+        signal: controller.signal
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.ok !== true) {
+        const error = new Error(data.error || 'file submission failed');
+        error.code = data.code;
+        throw error;
+      }
+      return data;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  submitFileForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (fileSubmitting) return;
+    const normalizedStudentId = studentId.value.trim();
+    studentId.value = normalizedStudentId;
+    const file = assignmentFile.files?.[0];
+    if (!normalizedStudentId) {
+      fileSubmitStatus.textContent = '学籍番号を入力してください．';
+      fileSubmitStatus.className = 'error';
+      updateSubmissionControls();
+      studentId.focus();
+      return;
+    }
+    if (!file) {
+      fileSubmitStatus.textContent = '提出する課題ファイルを選択してください．';
+      fileSubmitStatus.className = 'error';
+      updateSubmissionControls();
+      return;
+    }
+    if (!FILE_TYPES.has(fileExtension(file.name))) {
+      fileSubmitStatus.textContent = 'PowerPoint（.pptx）またはPDF（.pdf）を選択してください．';
+      fileSubmitStatus.className = 'error';
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      fileSubmitStatus.textContent = 'ファイルサイズが大きすぎます．100MB以下のファイルを提出してください．';
+      fileSubmitStatus.className = 'error';
+      return;
+    }
+    if (file.size <= 0) {
+      fileSubmitStatus.textContent = '空のファイルは提出できません．';
+      fileSubmitStatus.className = 'error';
+      return;
+    }
+
+    fileSubmitting = true;
+    updateSubmissionControls();
+    fileUploadProgress.hidden = false;
+    fileUploadProgress.value = 0;
+    fileUploadProgress.textContent = '0%';
+    fileSubmitStatus.textContent = '課題ファイルを提出しています… 0%';
+    fileSubmitStatus.className = '';
+    let uploadToken;
+    try {
+      const initialized = await fileApi('init', {
+        json: {
+          student_id: normalizedStudentId,
+          original_filename: file.name,
+          content_type: file.type || '',
+          file_size: file.size
+        }
+      });
+      uploadToken = initialized.upload_token;
+      if (typeof uploadToken !== 'string' || !uploadToken) throw new Error('invalid upload session');
+
+      const chunks = Math.ceil(file.size / FILE_CHUNK_SIZE);
+      for (let index = 0; index < chunks; index += 1) {
+        const start = index * FILE_CHUNK_SIZE;
+        const end = Math.min(file.size, start + FILE_CHUNK_SIZE);
+        await fileApi('chunk', {
+          body: file.slice(start, end),
+          uploadToken,
+          chunkNumber: index + 1,
+          timeoutMs: 60000
+        });
+        const percent = Math.round(end / file.size * 100);
+        fileUploadProgress.value = percent;
+        fileUploadProgress.textContent = `${percent}%`;
+        fileSubmitStatus.textContent = `課題ファイルを提出しています… ${percent}%`;
+      }
+
+      const completed = await fileApi('complete', { json: { upload_token: uploadToken }, timeoutMs: 120000 });
+      const displayTime = formatSubmittedAt(completed.submitted_at);
+      fileSubmitStatus.textContent = `課題ファイルを提出しました． 学籍番号：${completed.student_id || normalizedStudentId} ファイル名：${completed.original_filename || file.name}${displayTime ? ` 提出日時：${displayTime}` : ''}`;
+      fileSubmitStatus.className = '';
+      assignmentFile.value = '';
+      fileUploadProgress.hidden = true;
+    } catch (error) {
+      if (uploadToken) fileApi('abort', { json: { upload_token: uploadToken } }).catch(() => {});
+      fileSubmitStatus.textContent = error.code === 'FILE_TOO_LARGE'
+        ? 'ファイルサイズが大きすぎます．100MB以下のファイルを提出してください．'
+        : '提出できませんでした．通信環境を確認して，再度お試しください．';
+      fileSubmitStatus.className = 'error';
+      fileUploadProgress.hidden = true;
+    } finally {
+      fileSubmitting = false;
       updateSubmissionControls();
     }
   });

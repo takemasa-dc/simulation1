@@ -14,7 +14,13 @@ function screen(caseId = 'A', clipboard, compact = false, storage = new Map()) {
     select() { this.selected = true; }, setSelectionRange(start, end) { this.selection = [start, end]; },
     requestSubmit() { return this.events.submit({ preventDefault() {} }); }
   });
-  for (const id of ['chat','chatForm','userInput','target','send','reset','status','copyLog','copyStatus','manualCopy','logText','selectLog','submitLogForm','studentId','submitLog','submitStatus','interviewProgress']) elements[id] = make();
+  for (const id of ['chat','chatForm','userInput','target','send','reset','status','copyLog','copyStatus','manualCopy','logText','selectLog','submitLogForm','studentId','submitLog','submitStatus','submitFileForm','assignmentFile','submitFile','fileUploadProgress','fileSubmitStatus','interviewProgress']) elements[id] = make();
+  elements.assignmentFile.files = [];
+  let fileInputValue = '';
+  Object.defineProperty(elements.assignmentFile, 'value', {
+    get() { return fileInputValue; },
+    set(value) { fileInputValue = value; if (value === '') this.files = []; }
+  });
   elements.target.value = caseId === 'A' ? 'kazuko' : 'auto';
   const requests = [];
   const intervals = new Map();
@@ -39,6 +45,7 @@ function screen(caseId = 'A', clipboard, compact = false, storage = new Map()) {
     copy: () => elements.copyLog.events.click(),
     submit: () => elements.chatForm.requestSubmit(),
     submitConversation: () => elements.submitLogForm.requestSubmit(),
+    submitAssignment: () => elements.submitFileForm.requestSubmit(),
     reset: () => elements.reset.events.click(),
     confirm: value => { confirms=value; },
     advance: ms => {time+=ms; for (const fn of intervals.values()) fn();},
@@ -209,6 +216,8 @@ test('meeting gauge reaches zero at 25, allows 26-27, and ends after the 28th re
   assert.equal(s.requests.length,28);
   await s.copy();assert.match(s.copied[0],/回答28/);
   e.studentId.value='20260001';e.studentId.events.input();
+  e.assignmentFile.files=[assignment('終了後.pdf','application/pdf',5)];e.assignmentFile.events.change();
+  assert.equal(e.submitFile.disabled,false);
   const submission=s.submitConversation();
   assert.equal(s.requests.length,29);
   assert.equal(s.requests[28].url,'/api/submit-log');
@@ -269,8 +278,99 @@ test('both case pages show the interview-time gauge and explain that it is not e
     assert.match(html,/面談時間の目安は，質問回数に応じて減っていきます．実際の経過時間を計測しているものではありません．/);
     assert.match(html,/id="studentId"[^>]*maxlength="50"/u);
     assert.match(html,/id="submitLog"/u);
+    assert.match(html,/id="assignmentFile"[^>]*accept="[^"]*\.pptx,[^"]*\.pdf/u);
+    assert.match(html,/id="submitFile"/u);
     assert.doesNotMatch(html,/\d+\s*\/\s*25/u);
   }
+});
+
+function assignment(name, type, size) {
+  return { name, type, size, slice(start, end) { return { name, start, end, size: end - start }; } };
+}
+
+async function flush() {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+async function waitForRequests(screenState, count) {
+  for (let attempt = 0; attempt < 20 && screenState.requests.length < count; attempt += 1) {
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.ok(screenState.requests.length >= count, `expected ${count} requests, received ${screenState.requests.length}`);
+}
+
+test('assignment submission requires ID and file, validates type and 100MB limit before requests', async () => {
+  const s=screen('A'),e=s.elements;
+  await s.submitAssignment();
+  assert.match(e.fileSubmitStatus.textContent,/学籍番号を入力/);
+  e.studentId.value='20260001';e.studentId.events.input();
+  await s.submitAssignment();
+  assert.match(e.fileSubmitStatus.textContent,/課題ファイルを選択/);
+
+  e.assignmentFile.files=[assignment('malware.exe','application/octet-stream',10)];e.assignmentFile.events.change();
+  await s.submitAssignment();
+  assert.match(e.fileSubmitStatus.textContent,/PowerPoint/);
+  assert.equal(s.requests.length,0);
+
+  e.assignmentFile.files=[assignment('large.pdf','application/pdf',100*1024*1024+1)];e.assignmentFile.events.change();
+  await s.submitAssignment();
+  assert.match(e.fileSubmitStatus.textContent,/100MB以下/);
+  assert.equal(s.requests.length,0);
+});
+
+test('assignment upload sends chunks sequentially, shows success, allows repeat, and does not clear chat', async () => {
+  const s=screen('A'),e=s.elements;
+  await complete(s,'質問','和子「回答」','kazuko');
+  e.studentId.value='  TEST001  ';e.studentId.events.input();
+  e.assignmentFile.files=[assignment('課題.pdf','application/pdf',5)];e.assignmentFile.events.change();
+  assert.equal(e.submitFile.disabled,false);
+
+  const upload=s.submitAssignment();
+  assert.equal(e.submitFile.disabled,true);
+  let request=s.requests.at(-1);
+  assert.equal(request.url,'/api/submit-file?action=init');
+  assert.deepEqual(JSON.parse(request.options.body),{student_id:'TEST001',original_filename:'課題.pdf',content_type:'application/pdf',file_size:5});
+  request.resolve({ok:true,status:201,json:async()=>({ok:true,upload_token:'signed-token',chunk_size:4*1024*1024})});
+  await waitForRequests(s,3);
+
+  request=s.requests.at(-1);
+  assert.equal(request.url,'/api/submit-file?action=chunk');
+  assert.equal(request.options.headers['X-Upload-Token'],'signed-token');
+  assert.equal(request.options.headers['X-Chunk-Number'],'1');
+  request.resolve({ok:true,status:200,json:async()=>({ok:true,chunk_number:1})});
+  await waitForRequests(s,4);
+
+  request=s.requests.at(-1);
+  assert.equal(request.url,'/api/submit-file?action=complete');
+  request.resolve({ok:true,status:201,json:async()=>({ok:true,student_id:'TEST001',original_filename:'課題.pdf',submitted_at:'2026-10-05T03:04:00.000Z'})});
+  await upload;
+  assert.match(e.fileSubmitStatus.textContent,/課題ファイルを提出しました/);
+  assert.match(e.fileSubmitStatus.textContent,/TEST001/);
+  assert.match(e.fileSubmitStatus.textContent,/課題\.pdf/);
+  assert.equal(e.assignmentFile.files.length,0);
+  assert.equal(e.chat.children.length,2);
+  assert.equal(e.copyLog.disabled,false);
+
+  e.assignmentFile.files=[assignment('再提出.pptx','application/vnd.openxmlformats-officedocument.presentationml.presentation',3)];e.assignmentFile.events.change();
+  assert.equal(e.submitFile.disabled,false);
+});
+
+test('assignment failure never shows success and requests cleanup without clearing the selected file', async () => {
+  const s=screen('B'),e=s.elements;
+  e.studentId.value='TEST002';e.studentId.events.input();
+  const file=assignment('資料.pdf','application/pdf',5);
+  e.assignmentFile.files=[file];e.assignmentFile.events.change();
+  const upload=s.submitAssignment();
+  s.requests[0].resolve({ok:true,status:201,json:async()=>({ok:true,upload_token:'signed-token'})});
+  await waitForRequests(s,2);
+  s.requests[1].resolve({ok:false,status:502,json:async()=>({code:'UPLOAD_FAILED'})});
+  await upload;
+  assert.match(e.fileSubmitStatus.textContent,/提出できませんでした/);
+  assert.doesNotMatch(e.fileSubmitStatus.textContent,/提出しました/);
+  assert.equal(e.assignmentFile.files[0],file);
+  await waitForRequests(s,3);
+  assert.equal(s.requests.at(-1).url,'/api/submit-file?action=abort');
 });
 
 test('student ID and a conversation are required, and copy and submission use the identical log', async () => {
