@@ -46,6 +46,8 @@ test('the standalone submission page contains only assignment submission control
   const html = readFileSync(new URL('../submit.html', import.meta.url), 'utf8');
   assert.match(html, /id="studentId"[^>]*maxlength="50"/u);
   assert.match(html, /id="assignmentFile"[^>]*\.pptx,[^>]*\.pdf/u);
+  assert.match(html, /id="assignmentFile"[^>]*\.jpg,[^>]*\.jpeg,[^>]*\.png,[^>]*multiple/u);
+  assert.match(html, /4ファイル以上は、3ファイル以内に分けて提出してください/u);
   assert.match(html, /id="submitAssignment"[^>]*>課題を提出</u);
   assert.doesNotMatch(html, /会話ログ|事例A|事例B|面談時間|relationship/u);
 
@@ -77,7 +79,48 @@ test('standalone submission validates student ID, file type, and 100MB limit bef
   elements.assignmentFile.events.change();
   await state.submit();
   assert.match(elements.submissionStatus.textContent, /100MB以下/u);
+
+  elements.assignmentFile.files = [1, 2, 3, 4].map(index => assignment(`画像${index}.jpg`, 'image/jpeg', 10));
+  elements.assignmentFile.events.change();
+  await state.submit();
+  assert.match(elements.submissionStatus.textContent, /3つまで/u);
+  assert.match(elements.submissionStatus.textContent, /分けて提出/u);
   assert.equal(state.requests.length, 0);
+});
+
+test('standalone submission accepts and sequentially saves up to three images', async () => {
+  const state = page();
+  const elements = state.elements;
+  elements.studentId.value = 'IMAGE001';
+  elements.studentId.events.input();
+  const files = [
+    assignment('写真.jpg', 'image/jpeg', 3),
+    assignment('図.png', 'image/png', 4),
+    assignment('記録.heic', 'image/heic', 5)
+  ];
+  elements.assignmentFile.files = files;
+  elements.assignmentFile.events.change();
+
+  const upload = state.submit();
+  for (let index = 0; index < files.length; index += 1) {
+    const base = index * 3;
+    await waitForRequests(state, base + 1);
+    assert.equal(state.requests[base].url, '/api/submit-file?action=init');
+    assert.equal(JSON.parse(state.requests[base].options.body).original_filename, files[index].name);
+    state.requests[base].resolve({ ok: true, status: 201, json: async () => ({ ok: true, upload_token: `token-${index}` }) });
+    await waitForRequests(state, base + 2);
+    state.requests[base + 1].resolve({ ok: true, status: 200, json: async () => ({ ok: true }) });
+    await waitForRequests(state, base + 3);
+    state.requests[base + 2].resolve({ ok: true, status: 201, json: async () => ({
+      ok: true, student_id: 'IMAGE001', original_filename: files[index].name, submitted_at: '2026-10-05T03:04:00.000Z'
+    }) });
+  }
+  await upload;
+
+  assert.equal(state.requests.length, 9);
+  assert.match(elements.submissionStatus.textContent, /3件の課題ファイルを提出しました/u);
+  assert.match(elements.submissionStatus.textContent, /写真\.jpg、図\.png、記録\.heic/u);
+  assert.equal(elements.assignmentFile.files.length, 0);
 });
 
 test('standalone submission uploads sequentially, reports success, and allows resubmission', async () => {

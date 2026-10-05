@@ -2,8 +2,9 @@
   'use strict';
 
   const MAX_FILE_SIZE = 100 * 1024 * 1024;
+  const MAX_FILES = 3;
   const FILE_CHUNK_SIZE = 4 * 1024 * 1024;
-  const FILE_TYPES = new Set(['.pdf', '.pptx']);
+  const FILE_TYPES = new Set(['.pdf', '.pptx', '.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp']);
   const form = document.getElementById('assignmentForm');
   const studentId = document.getElementById('studentId');
   const assignmentFile = document.getElementById('assignmentFile');
@@ -58,58 +59,10 @@
     }
   }
 
-  studentId.addEventListener('input', updateControls);
-  assignmentFile.addEventListener('change', () => {
-    status.textContent = '';
-    status.className = '';
-    updateControls();
-  });
-
-  form.addEventListener('submit', async event => {
-    event.preventDefault();
-    if (submitting) return;
-
-    const normalizedStudentId = studentId.value.trim();
-    studentId.value = normalizedStudentId;
-    const file = assignmentFile.files?.[0];
-    if (!normalizedStudentId) {
-      status.textContent = '学籍番号を入力してください．';
-      status.className = 'error';
-      updateControls();
-      studentId.focus();
-      return;
-    }
-    if (!file) {
-      status.textContent = '提出する課題ファイルを選択してください．';
-      status.className = 'error';
-      updateControls();
-      return;
-    }
-    if (!FILE_TYPES.has(extension(file.name))) {
-      status.textContent = 'PowerPoint（.pptx）またはPDF（.pdf）を選択してください．';
-      status.className = 'error';
-      return;
-    }
-    if (file.size > MAX_FILE_SIZE) {
-      status.textContent = 'ファイルサイズが大きすぎます．100MB以下のファイルを提出してください．';
-      status.className = 'error';
-      return;
-    }
-    if (file.size <= 0) {
-      status.textContent = '空のファイルは提出できません．';
-      status.className = 'error';
-      return;
-    }
-
-    submitting = true;
-    updateControls();
-    progress.hidden = false;
-    progress.value = 0;
-    progress.textContent = '0%';
-    status.textContent = '課題ファイルを提出しています… 0%';
-    status.className = '';
+  async function uploadFile(normalizedStudentId, file, fileIndex, fileCount) {
     let uploadToken;
     try {
+      status.textContent = `課題ファイルを提出しています… ${fileIndex + 1}/${fileCount} ${file.name}`;
       const initialized = await fileApi('init', {
         json: {
           student_id: normalizedStudentId,
@@ -131,22 +84,94 @@
           chunkNumber: index + 1,
           timeoutMs: 60000
         });
-        const percent = Math.round(end / file.size * 100);
+        const percent = Math.round((fileIndex + end / file.size) / fileCount * 100);
         progress.value = percent;
         progress.textContent = `${percent}%`;
-        status.textContent = `課題ファイルを提出しています… ${percent}%`;
+        status.textContent = `課題ファイルを提出しています… ${fileIndex + 1}/${fileCount} ${file.name}（${percent}%）`;
       }
+      return await fileApi('complete', { json: { upload_token: uploadToken }, timeoutMs: 120000 });
+    } catch (error) {
+      if (uploadToken) fileApi('abort', { json: { upload_token: uploadToken } }).catch(() => {});
+      error.filename = file.name;
+      throw error;
+    }
+  }
 
-      const completed = await fileApi('complete', { json: { upload_token: uploadToken }, timeoutMs: 120000 });
-      const displayTime = formatSubmittedAt(completed.submitted_at);
-      status.textContent = `課題ファイルを提出しました． 学籍番号：${completed.student_id || normalizedStudentId} ファイル名：${completed.original_filename || file.name}${displayTime ? ` 提出日時：${displayTime}` : ''}`;
+  studentId.addEventListener('input', updateControls);
+  assignmentFile.addEventListener('change', () => {
+    status.textContent = '';
+    status.className = '';
+    updateControls();
+  });
+
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (submitting) return;
+
+    const normalizedStudentId = studentId.value.trim();
+    studentId.value = normalizedStudentId;
+    const files = Array.from(assignmentFile.files || []);
+    if (!normalizedStudentId) {
+      status.textContent = '学籍番号を入力してください．';
+      status.className = 'error';
+      updateControls();
+      studentId.focus();
+      return;
+    }
+    if (!files.length) {
+      status.textContent = '提出する課題ファイルを選択してください．';
+      status.className = 'error';
+      updateControls();
+      return;
+    }
+    if (files.length > MAX_FILES) {
+      status.textContent = '1回に提出できるファイルは3つまでです．4ファイル以上は，3ファイル以内に分けて提出してください．';
+      status.className = 'error';
+      return;
+    }
+    const invalidType = files.find(file => !FILE_TYPES.has(extension(file.name)));
+    if (invalidType) {
+      status.textContent = `「${invalidType.name}」は提出できません．PowerPoint、PDFまたは画像を選択してください．`;
+      status.className = 'error';
+      return;
+    }
+    const oversized = files.find(file => file.size > MAX_FILE_SIZE);
+    if (oversized) {
+      status.textContent = 'ファイルサイズが大きすぎます．100MB以下のファイルを提出してください．';
+      status.className = 'error';
+      return;
+    }
+    if (files.some(file => file.size <= 0)) {
+      status.textContent = '空のファイルは提出できません．';
+      status.className = 'error';
+      return;
+    }
+
+    submitting = true;
+    updateControls();
+    progress.hidden = false;
+    progress.value = 0;
+    progress.textContent = '0%';
+    status.textContent = '課題ファイルを提出しています… 0%';
+    status.className = '';
+    const completedFiles = [];
+    try {
+      for (let index = 0; index < files.length; index += 1) {
+        completedFiles.push(await uploadFile(normalizedStudentId, files[index], index, files.length));
+      }
+      const lastCompleted = completedFiles.at(-1);
+      const displayTime = formatSubmittedAt(lastCompleted.submitted_at);
+      const filenames = completedFiles.map((result, index) => result.original_filename || files[index].name).join('、');
+      status.textContent = `${completedFiles.length}件の課題ファイルを提出しました． 学籍番号：${lastCompleted.student_id || normalizedStudentId} ファイル名：${filenames}${displayTime ? ` 提出日時：${displayTime}` : ''}`;
       assignmentFile.value = '';
       progress.hidden = true;
     } catch (error) {
-      if (uploadToken) fileApi('abort', { json: { upload_token: uploadToken } }).catch(() => {});
-      status.textContent = error.code === 'FILE_TOO_LARGE'
+      const reason = error.code === 'FILE_TOO_LARGE'
         ? 'ファイルサイズが大きすぎます．100MB以下のファイルを提出してください．'
         : '提出できませんでした．通信環境を確認して，再度お試しください．';
+      status.textContent = completedFiles.length
+        ? `${completedFiles.length}件は提出済みです．「${error.filename}」は${reason} 成功済みのファイルを除いて選択し直してください．`
+        : reason;
       status.className = 'error';
       progress.hidden = true;
     } finally {

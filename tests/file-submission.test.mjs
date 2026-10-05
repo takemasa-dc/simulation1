@@ -181,6 +181,8 @@ test('Vercel file API validates metadata and forwards only to the submission Wor
   assert.equal(response.statusCode, 201);
   response = await callApi('init', { student_id: '20260001', original_filename: '発表.pptx', content_type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', file_size: 10 }, { 'content-type': 'application/json' });
   assert.equal(response.statusCode, 201);
+  response = await callApi('init', { student_id: '20260001', original_filename: '写真.jpg', content_type: 'image/jpeg', file_size: 10 }, { 'content-type': 'application/json' });
+  assert.equal(response.statusCode, 201);
   response = await callApi('chunk', Buffer.from('1234'), { 'content-type': 'application/octet-stream', 'content-length': '4', 'x-upload-token': 'signed-token', 'x-chunk-number': '1' });
   assert.equal(response.statusCode, 200);
   response = await callApi('complete', { upload_token: 'signed-token' }, { 'content-type': 'application/json' });
@@ -201,11 +203,14 @@ test('Worker saves PDF and multipart PPTX in private R2 and appends D1 rows for 
   pptx.set([0x50, 0x4b, 0x03, 0x04]);
   response = await submitFile(env, { filename: '発表.pptx', contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', bytes: pptx });
   assert.equal(response.status, 201);
-  assert.equal(env.SUBMISSIONS_DB.fileRows.length, 2);
+  response = await submitFile(env, { filename: '写真.png', contentType: 'image/png', bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) });
+  assert.equal(response.status, 201);
+  assert.equal(env.SUBMISSIONS_DB.fileRows.length, 3);
   assert.equal(env.SUBMISSIONS_DB.fileRows[0].student_id, '20260001');
   assert.equal(env.SUBMISSIONS_DB.fileRows[1].student_id, '20260001');
+  assert.equal(env.SUBMISSIONS_DB.fileRows[2].original_filename, '写真.png');
   assert.notEqual(env.SUBMISSIONS_DB.fileRows[0].r2_object_key, env.SUBMISSIONS_DB.fileRows[1].r2_object_key);
-  assert.deepEqual(env.SUBMISSION_FILES.multipartParts.slice(-2), [8 * 1024 * 1024, 1024 * 1024]);
+  assert.deepEqual(env.SUBMISSION_FILES.multipartParts.slice(-3, -1), [8 * 1024 * 1024, 1024 * 1024]);
   assert.equal([...env.SUBMISSION_FILES.objects.keys()].some(key => key.startsWith('pending/')), false);
   for (const row of env.SUBMISSIONS_DB.fileRows) assert.equal(env.SUBMISSION_FILES.objects.has(row.r2_object_key), true);
 

@@ -12,14 +12,14 @@
 <main>
 <section class="submission-card" aria-labelledby="pageTitle">
 <h1 id="pageTitle">地域包括ケア演習 課題提出</h1>
-<p>大学システムを利用できない場合の課題提出ページです。学籍番号を入力し、PowerPointまたはPDFの課題ファイルを提出してください。</p>
+<p>大学システムを利用できない場合の課題提出ページです。学籍番号を入力し、PowerPoint、PDFまたは画像の課題ファイルを提出してください。</p>
 <form id="assignmentForm">
 <label for="studentId">学籍番号</label>
 <input id="studentId" name="student_id" type="text" maxlength="50" autocomplete="off" required>
 
 <label for="assignmentFile">課題ファイル</label>
-<input id="assignmentFile" name="assignment_file" type="file" accept=".pptx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation" required>
-<p class="hint">PowerPoint（.pptx）またはPDF（.pdf）、100MB以下</p>
+<input id="assignmentFile" name="assignment_file" type="file" accept=".pptx,.pdf,.jpg,.jpeg,.png,.heic,.heif,.webp,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/jpeg,image/png,image/heic,image/heif,image/webp" multiple required>
+<p class="hint">PowerPoint（.pptx）、PDF（.pdf）または画像（JPEG、PNG、HEIC、WebP）。1ファイル100MB以下、1回につき最大3ファイルです。4ファイル以上は、3ファイル以内に分けて提出してください。</p>
 
 <button type="submit" id="submitAssignment" disabled>課題を提出</button>
 <progress id="uploadProgress" max="100" value="0" hidden>0%</progress>

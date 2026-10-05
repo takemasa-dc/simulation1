@@ -2,12 +2,17 @@ const MAX_FILE_SIZE = 100 * 1024 * 1024;
 const CHUNK_SIZE = 4 * 1024 * 1024;
 const MAX_JSON_BYTES = 32 * 1024;
 const MAX_TOKEN_LENGTH = 4096;
-const ALLOWED_EXTENSIONS = new Set(['.pdf', '.pptx']);
+const ALLOWED_EXTENSIONS = new Set(['.pdf', '.pptx', '.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp']);
 const ALLOWED_CONTENT_TYPES = new Set([
   '',
   'application/octet-stream',
   'application/pdf',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'image/jpeg',
+  'image/png',
+  'image/heic',
+  'image/heif',
+  'image/webp'
 ]);
 
 function respond(res, status, data) {
