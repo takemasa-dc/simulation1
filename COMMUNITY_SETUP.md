@@ -1,6 +1,6 @@
 # 地域包括ケア演習 事例A・B
 
-新しいページは `/caseA` と `/caseB` です。既存の `/case2`、トップ `/` から `/case2` への転送、`index.html`、`case2.html`、既存の画像は変更しません。新しいフレームワークやnpm依存パッケージはありません。
+事例ページは `/caseA` と `/caseB`、独立した課題ファイル提出ページは `/submit` です。既存の `/case2`、トップ `/` から `/case2` への転送、`index.html`、`case2.html`、既存の画像は変更しません。新しいフレームワークやnpm依存パッケージはありません。
 
 ## APIと非公開設定
 
@@ -30,7 +30,7 @@ Vercelの対象プロジェクト → Settings → Environment Variables に、�
 
 1. 既存のGitHub連携プロジェクトを使用します。Framework Presetは静的サイトの `Other`、プロジェクトのルートをこのリポジトリにします。独自のBuild Commandや別のOutput Directoryが既に指定されている場合は、ルートのHTMLと `api/` が配信される設定か確認してください。追加のビルド処理は不要です。
 2. 上記の環境変数を登録します。Node.js 22以上を利用してください。
-3. PRのPreviewを再デプロイし、`/caseA`、`/caseB` を開きます。`cleanUrls: true` は既存設定を維持しています。リダイレクトの追加は不要です。チャットFunctionは `maxDuration: 60`、ログ提出Functionは `maxDuration: 15`、ファイル提出Functionは `maxDuration: 180` です。
+3. PRのPreviewを再デプロイし、`/caseA`、`/caseB`、`/submit` を開きます。`cleanUrls: true` は既存設定を維持しているため、`submit.html` は `/submit` で開けます。リダイレクトの追加は不要です。チャットFunctionは `maxDuration: 60`、ログ提出Functionは `maxDuration: 15`、ファイル提出Functionは `maxDuration: 180` です。
 4. 両事例で質問・話者指定・リセットを試します。開発者ツールのリクエストに非公開設定やAPIキーがなく、返却内容が `reply` と `userMessage` だけであることを確認します。
 5. `/` の転送先が `/case2` であること、既存ページ・画像が変わっていないことを確認します。
 6. PRをマージすると通常のGit連携デプロイで本番へ反映されます。環境変数変更後は新しいデプロイが必要です。本PRでは本番マージ・本番設定変更は行いません。
@@ -56,7 +56,9 @@ LLMの回答を通じた設定開示を完全に防ぐことはできません�
 
 ## 会話ログ・課題ファイル提出用Cloudflare Worker
 
-既存のOpenAI中継Workerのソースはこのリポジトリに含まれていません。既存チャットを壊さないため、ログと課題ファイルの提出は `cloudflare/submission-worker/` の専用Workerへ分離します。学生画面は同一オリジンの `/api/submit-log` と `/api/submit-file` を呼び、Vercel Functionが共有シークレットを付けて提出Workerへ転送します。提出WorkerはOpenAI APIを呼びません。
+既存のOpenAI中継Workerのソースはこのリポジトリに含まれていません。既存チャットを壊さないため、ログと課題ファイルの提出は `cloudflare/submission-worker/` の専用Workerへ分離します。事例A・Bの会話ログ提出は同一オリジンの `/api/submit-log`、独立した `/submit` ページの課題ファイル提出は `/api/submit-file` を呼びます。どちらもVercel Functionが共有シークレットを付けて提出Workerへ転送し、提出WorkerはOpenAI APIを呼びません。
+
+`/submit` は事例A・B、会話履歴、面談回数、relationship state、会話ログ提出から独立しています。大学システム障害時にも単独URLとして案内できます。学籍番号と課題ファイル以外の入力は求めません。
 
 D1の既存 `submissions` テーブルには会話ログ提出ごとに新しい行を追加し、次の4項目を保存します。
 
@@ -170,7 +172,7 @@ Invoke-WebRequest -Uri "<提出WorkerのURL>/export.csv" -Headers $headers -OutF
 
 ## 検証と更新
 
-`node --test tests/community-chat.test.mjs tests/community-ui.test.mjs tests/relationship-state.test.mjs tests/submit-log.test.mjs tests/file-submission.test.mjs` で入力検証、非公開設定の分離、履歴保持、50並列の独立性、APIエラー・制限、二重送信、リセット、ログ提出、ファイル分割送信、R2保存、D1への追記、管理認証、個別ダウンロード、CSV出力をモック検証します。テストには非公開の事例情報を含めません。
+`node --test tests/community-chat.test.mjs tests/community-ui.test.mjs tests/relationship-state.test.mjs tests/submit-log.test.mjs tests/file-submission.test.mjs tests/submit-ui.test.mjs` で入力検証、非公開設定の分離、履歴保持、50並列の独立性、APIエラー・制限、二重送信、リセット、ログ提出、独立提出ページ、ファイル分割送信、R2保存、D1への追記、管理認証、個別ダウンロード、CSV出力をモック検証します。テストには非公開の事例情報を含めません。
 
 設定を更新する場合はリポジトリ外の人物設定テキストを編集し、次を実行して新しい環境変数の値を生成します。
 

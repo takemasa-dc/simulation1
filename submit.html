@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>地域包括ケア演習 課題提出</title>
+<link rel="stylesheet" href="submit.css">
+<script src="submit.js" defer></script>
+</head>
+<body>
+<main>
+<section class="submission-card" aria-labelledby="pageTitle">
+<h1 id="pageTitle">地域包括ケア演習 課題提出</h1>
+<p>大学システムを利用できない場合の課題提出ページです。学籍番号を入力し、PowerPointまたはPDFの課題ファイルを提出してください。</p>
+<form id="assignmentForm">
+<label for="studentId">学籍番号</label>
+<input id="studentId" name="student_id" type="text" maxlength="50" autocomplete="off" required>
+
+<label for="assignmentFile">課題ファイル</label>
+<input id="assignmentFile" name="assignment_file" type="file" accept=".pptx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation" required>
+<p class="hint">PowerPoint（.pptx）またはPDF（.pdf）、100MB以下</p>
+
+<button type="submit" id="submitAssignment" disabled>課題を提出</button>
+<progress id="uploadProgress" max="100" value="0" hidden>0%</progress>
+<p id="submissionStatus" role="status" aria-live="polite"></p>
+</form>
+</section>
+</main>
+</body>
+</html>
